@@ -66,6 +66,11 @@ final class CoreClient {
         process.standardError = FileHandle.standardError
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
+            if data.isEmpty {
+                // End of file: the core exited. terminationHandler takes it from here.
+                handle.readabilityHandler = nil
+                return
+            }
             guard let self else { return }
             self.queue.async { self.receive(data) }
         }
