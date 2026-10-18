@@ -37,6 +37,14 @@
 	<string>Murmur listens only while you hold the dictation key, and turns your speech into text on this Mac.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Murmur sends commands to other apps only when a connector you turned on needs to, and asks you first.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Murmur reads and adds events in Calendar only when you turn on the Calendar connector and ask the agent to.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Murmur reads and adds events in Calendar only when you turn on the Calendar connector and ask the agent to.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Murmur reads and adds items in Reminders only when you turn on the Reminders connector and ask the agent to.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Murmur reads and adds items in Reminders only when you turn on the Reminders connector and ask the agent to.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Murmur can look at the area around your pointer when you ask it to do something and there is no text to read.</string>
 	<key>NSHumanReadableCopyright</key>

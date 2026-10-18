@@ -60,6 +60,14 @@ export function rpcBridge(peer: JsonRpcPeer): ShellBridge & { approvals: RpcAppr
     captureContext: () => peer.request<CapturedContext>("context.capture", {}, 3_000),
     secrets: new RpcSecretStore(peer),
     approvals: new RpcApprovalUi(peer),
+    openUrl: async (url) => void (await peer.request("url.open", { url }, 10_000)),
+    // The Mac app answers apple.call with Mail, Calendar and Reminders. Other shells do not.
+    ...(process.platform === "darwin"
+      ? {
+          native: (service: string, action: string, args: Record<string, unknown>) =>
+            peer.request("apple.call", { service, action, args }, 60_000),
+        }
+      : {}),
     emit: (event) => {
       const { type, ...payload } = event;
       peer.notify(type, payload);
@@ -221,6 +229,37 @@ export function registerMethods(peer: JsonRpcPeer, core: MurmurCore, approvals: 
     .handle("connectors.authorize", async (p) => {
       await core.authorizeConnector(str(p.id, "id"), async (url) => {
         await peer.request("url.open", { url });
+      });
+      return { ok: true };
+    })
+    .handle("composio.status", async () => ({
+      hasKey: await core.composio.hasKey(),
+      userId: core.composio.userId(),
+    }))
+    .handle("composio.setKey", async (p) => {
+      await core.composio.setKey(str(p.key, "key"));
+      return { ok: true };
+    })
+    .handle("composio.removeKey", async () => {
+      await core.composio.removeKey();
+      return { ok: true };
+    })
+    .handle("composio.apps", async (p) => ({
+      apps: await core.composio.apps(typeof p.query === "string" ? p.query : undefined),
+    }))
+    .handle("composio.connect", (p) => {
+      // The sign-in waits for the browser, so this answers at once and the result arrives as a composio.connect event.
+      void core.composio.connect(str(p.app, "app")).catch(() => {});
+      return { started: true };
+    })
+    .handle("composio.disconnect", async (p) => {
+      await core.composio.disconnect(str(p.app, "app"));
+      return { ok: true };
+    })
+    .handle("composio.configure", (p) => {
+      core.composio.configure(str(p.app, "app"), {
+        ...(typeof p.enabled === "boolean" ? { enabled: p.enabled } : {}),
+        ...(typeof p.readOnly === "boolean" ? { readOnly: p.readOnly } : {}),
       });
       return { ok: true };
     })

@@ -19,6 +19,27 @@ struct ChatGptState {
     var error: String?
 }
 
+/// One app Composio can connect, as the Apps tab shows it.
+struct ComposioApp: Identifiable {
+    var id: String { slug }
+    let slug: String
+    let name: String
+    let description: String
+    var connected: Bool
+    var enabled: Bool
+    var readOnly: Bool
+}
+
+/// The Composio link as the Apps tab shows it.
+struct ComposioState {
+    var hasKey = false
+    var apps: [ComposioApp] = []
+    var loading = false
+    var connecting: String?
+    var error: String?
+    var keySaved = false
+}
+
 /// Owns the core connection, the hotkey, the microphone and every window. Runs on the main thread.
 final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     static let shared = AppModel()
@@ -45,6 +66,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     @Published var apiKeySaved = Keychain.exists("llm/apiKey")
     @Published var apiKeyError: String?
     @Published var chatgpt = ChatGptState()
+    @Published var composio = ComposioState()
     @Published var micStatus = Permissions.microphone
     @Published var axStatus = Permissions.accessibility
     @Published var screenStatus = Permissions.screenRecording
@@ -155,6 +177,14 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         core.handle("secret.delete") { params, reply in
             Keychain.delete(params["key"] as? String ?? "")
             reply(.success(["ok": true]))
+        }
+        core.handle("apple.call") { params, reply in
+            AppleBridge.call(
+                service: params["service"] as? String ?? "",
+                action: params["action"] as? String ?? "",
+                args: params["args"] as? JSONObject ?? [:],
+                reply: reply
+            )
         }
         core.handle("url.open") { params, reply in
             if let string = params["url"] as? String, let url = URL(string: string), url.scheme == "https" {
@@ -336,6 +366,21 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                 chatgpt.waiting = false
                 chatgpt.code = nil
                 chatgpt.error = params["error"] as? String ?? "unknown error"
+            default:
+                break
+            }
+        case "composio.connect":
+            switch params["state"] as? String {
+            case "waiting":
+                composio.connecting = params["toolkit"] as? String
+                composio.error = nil
+            case "done":
+                composio.connecting = nil
+                composio.error = nil
+                refreshComposioApps()
+            case "failed":
+                composio.connecting = nil
+                composio.error = params["error"] as? String
             default:
                 break
             }
@@ -588,6 +633,92 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             self?.refreshSettings()
             self?.refreshStatus()
         }
+    }
+
+    // MARK: Composio
+
+    func refreshComposio() {
+        core.request("composio.status") { [weak self] result in
+            guard let self, case let .success(value) = result, let info = value as? JSONObject else { return }
+            self.composio.hasKey = info["hasKey"] as? Bool ?? false
+            if self.composio.hasKey { self.refreshComposioApps() } else { self.composio.apps = [] }
+        }
+    }
+
+    func refreshComposioApps(query: String = "") {
+        composio.loading = true
+        core.request("composio.apps", ["query": query], timeout: 60) { [weak self] result in
+            guard let self else { return }
+            self.composio.loading = false
+            switch result {
+            case let .success(value):
+                let list = (value as? JSONObject)?["apps"] as? [JSONObject] ?? []
+                self.composio.apps = list.map {
+                    ComposioApp(
+                        slug: $0["slug"] as? String ?? "",
+                        name: $0["name"] as? String ?? "",
+                        description: $0["description"] as? String ?? "",
+                        connected: $0["connected"] as? Bool ?? false,
+                        enabled: $0["enabled"] as? Bool ?? true,
+                        readOnly: $0["readOnly"] as? Bool ?? false
+                    )
+                }
+                // Connected apps first, then Composio's own order.
+                self.composio.apps = self.composio.apps.filter(\.connected) + self.composio.apps.filter { !$0.connected }
+            case let .failure(error):
+                self.composio.error = error.localizedDescription
+            }
+        }
+    }
+
+    func saveComposioKey(_ key: String) {
+        composio.error = nil
+        core.request("composio.setKey", ["key": key], timeout: 40) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success:
+                self.composio.hasKey = true
+                self.composio.keySaved = true
+                self.refreshComposioApps()
+            case let .failure(error):
+                self.composio.error = error.localizedDescription
+            }
+        }
+    }
+
+    func removeComposioKey() {
+        core.request("composio.removeKey") { [weak self] _ in
+            self?.composio = ComposioState()
+        }
+    }
+
+    func connectComposioApp(_ slug: String) {
+        composio.error = nil
+        composio.connecting = slug
+        core.request("composio.connect", ["app": slug]) { [weak self] result in
+            if case let .failure(error) = result {
+                self?.composio.connecting = nil
+                self?.composio.error = error.localizedDescription
+            }
+        }
+    }
+
+    func disconnectComposioApp(_ slug: String) {
+        core.request("composio.disconnect", ["app": slug], timeout: 40) { [weak self] result in
+            if case let .failure(error) = result { self?.composio.error = error.localizedDescription }
+            self?.refreshComposioApps()
+        }
+    }
+
+    func configureComposioApp(_ slug: String, enabled: Bool? = nil, readOnly: Bool? = nil) {
+        if let index = composio.apps.firstIndex(where: { $0.slug == slug }) {
+            if let enabled { composio.apps[index].enabled = enabled }
+            if let readOnly { composio.apps[index].readOnly = readOnly }
+        }
+        var params: JSONObject = ["app": slug]
+        if let enabled { params["enabled"] = enabled }
+        if let readOnly { params["readOnly"] = readOnly }
+        core.request("composio.configure", params)
     }
 
     /// Saves a file path setting and reads it back from the core, so a lost write shows up in the UI.

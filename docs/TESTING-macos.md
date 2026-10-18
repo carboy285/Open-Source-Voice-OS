@@ -94,6 +94,28 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 
 **4.0 ChatGPT subscription.** In Settings › Agent choose "ChatGPT subscription" and click "Sign in with ChatGPT". Murmur shows a code and opens OpenAI's page. Enter the code there and approve. Expect "Signed in as <your email>" within a few seconds, and no API key needed. Then hold Right Option + Shift and ask for something simple. "Sign out" removes it. The sign-in is stored in your keychain as `llm/chatgpt`; the API key option still works.
 
+### 4.5 Apps through Composio
+
+1. Settings › Apps shows a field for a Composio API key. Paste a wrong key: you see "Composio didn't accept the API key". Paste a real one: the key is saved and a list of apps appears, with the most used first.
+2. Search "calendar" and press Return: Google Calendar is in the results.
+3. Click Connect on Google Calendar. Your browser opens Google's sign-in. Finish it: the row gets a green check within a few seconds and shows "Agent can use it" and "Read only".
+4. Hold the agent key and say "What's on my calendar tomorrow?" The answer lists real events and no approval appears (reading is automatic).
+5. Say "Add lunch with Sam tomorrow at noon to my calendar." An approval appears with the details; Edit works; approving adds the event.
+6. Turn on Read only for Google Calendar, repeat step 5: the agent says it can't add events.
+7. Disconnect Google Calendar, then say "What's on my calendar?" The agent asks to connect it (an approval named "Connect an app"). Approve it, finish the sign-in, and it carries on and answers.
+8. Remove the key, then ask for your calendar again: you are told to add the Composio key in Settings › Apps.
+
+### 4.6 Mail, Calendar and Reminders on this Mac
+
+1. Settings › Connectors: turn on "Mail (Mac)", "Calendar (Mac)" and "Reminders (Mac)".
+2. Say "Summarize my unread mail." macOS asks whether Murmur may control Mail; allow it. The reply names real senders and subjects. No approval appears.
+3. Say "Read the one from <sender>." The reply summarizes that message.
+4. Say "What's on my Apple calendar this week?" macOS asks for Calendar access; allow it. The events match the Calendar app.
+5. Say "Remind me to call Mum tomorrow at 5." An approval appears. After you approve, the item is in the Reminders app with that time.
+6. Say "What's on my reminders?" and then "Mark the call Mum one as done." Approve; the item is checked off in Reminders.
+7. Say "Draft an email to <someone> saying I'll be late." An approval appears; after approving, a draft window opens in Mail. Nothing is sent.
+8. Deny a permission in System Settings › Privacy & Security, ask again: the reply tells you where to allow it.
+
 ## 5. MCP
 
 ```sh

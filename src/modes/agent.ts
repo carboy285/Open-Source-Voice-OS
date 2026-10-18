@@ -19,6 +19,7 @@ How to work:
 - Use the tools you are given. Prefer the fewest calls. Do not invent tools.
 - Anything that sends, books, changes or deletes something is shown to the user as a preview first. If a result says the user cancelled, do not repeat the same call. Adjust it or explain and stop.
 - Never say an action happened unless a tool result confirms it.
+- If a request needs an app (mail, calendar, chat, documents) and none of your tools reach it, call connections.connect for that app instead of giving up. After it succeeds, carry on with the request.
 - If no tool fits the request, say what is missing and which connector would help.
 - Reply in one to three short sentences, in the language the user spoke.
 
@@ -121,8 +122,8 @@ export async function runAgent(
     error,
   });
 
-  const specs = await tools.list();
-  const byName = new Map(specs.map((spec) => [spec.name, spec]));
+  let specs = await tools.list();
+  let byName = new Map(specs.map((spec) => [spec.name, spec]));
   const context = screenContextBlock(options.context);
   const messages: Message[] = [{ role: "user", text: [context, `Request: ${request}`].filter(Boolean).join("\n\n") }];
   const overTime = () => clock.now() - started >= maxWallMs;
@@ -131,6 +132,11 @@ export async function runAgent(
     if (options.signal?.aborted) return outcome("cancelled", "Task cancelled.", step - 1);
     if (overTime()) return outcome("time_limit", "I stopped because the task took too long.", step - 1);
     options.onEvent?.({ type: "thinking", step });
+    // Connecting an app mid-task adds its tools, so the list is read again each step.
+    if (step > 1) {
+      specs = await tools.list().catch(() => specs);
+      byName = new Map(specs.map((spec) => [spec.name, spec]));
+    }
 
     let response;
     try {

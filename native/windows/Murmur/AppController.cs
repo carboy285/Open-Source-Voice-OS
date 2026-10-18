@@ -48,6 +48,11 @@ namespace Murmur
         public string ChatGptUrl { get; private set; } = "";
         public bool ChatGptWaiting { get; private set; }
         public string ChatGptError { get; private set; } = "";
+        public bool ComposioHasKey { get; private set; }
+        public List<JsonObject> ComposioApps { get; private set; } = new();
+        public string ComposioConnecting { get; private set; } = "";
+        public string ComposioError { get; private set; } = "";
+        public bool ComposioLoading { get; private set; }
         private OnboardingWindow? onboarding;
         private readonly DispatcherTimer reportTimer = new();
         private DateTime pressStarted;
@@ -354,6 +359,25 @@ namespace Murmur
                         settingsWindow?.Rebuild();
                     }
                     break;
+                case "composio.connect":
+                    if (p.Str("state") == "waiting")
+                    {
+                        ComposioConnecting = p.Str("toolkit");
+                        ComposioError = "";
+                    }
+                    else if (p.Str("state") == "done")
+                    {
+                        ComposioConnecting = "";
+                        ComposioError = "";
+                        _ = RefreshComposioApps();
+                    }
+                    else if (p.Str("state") == "failed")
+                    {
+                        ComposioConnecting = "";
+                        ComposioError = p.Str("error", "unknown error");
+                    }
+                    settingsWindow?.Rebuild();
+                    break;
                 case "reminder.fire":
                     new ReminderToast(this, p.Int("id"), p.Str("text"), p.Bool("missed")).Present();
                     break;
@@ -548,6 +572,92 @@ namespace Murmur
             await RefreshChatGpt();
         }
 
+        public async Task RefreshComposio()
+        {
+            try
+            {
+                var status = await Core.Request("composio.status");
+                ComposioHasKey = status.Bool("hasKey");
+            }
+            catch (CoreException) { return; }
+            if (ComposioHasKey) await RefreshComposioApps();
+            else
+            {
+                ComposioApps = new List<JsonObject>();
+                settingsWindow?.Rebuild();
+            }
+        }
+
+        public async Task RefreshComposioApps(string query = "")
+        {
+            ComposioLoading = true;
+            settingsWindow?.Rebuild();
+            try
+            {
+                var reply = await Core.Request("composio.apps", new JsonObject { ["query"] = query }, 60000);
+                var apps = (reply?["apps"] as JsonArray)?.OfType<JsonObject>().ToList() ?? new List<JsonObject>();
+                ComposioApps = apps.Where(a => a.Bool("connected")).Concat(apps.Where(a => !a.Bool("connected"))).ToList();
+            }
+            catch (CoreException error) { ComposioError = error.Message; }
+            ComposioLoading = false;
+            settingsWindow?.Rebuild();
+        }
+
+        public async void SaveComposioKey(string key)
+        {
+            ComposioError = "";
+            try
+            {
+                await Core.Request("composio.setKey", new JsonObject { ["key"] = key }, 40000);
+                ComposioHasKey = true;
+                await RefreshComposioApps();
+            }
+            catch (CoreException error)
+            {
+                ComposioError = error.Message;
+                settingsWindow?.Rebuild();
+            }
+        }
+
+        public async void RemoveComposioKey()
+        {
+            try { await Core.Request("composio.removeKey"); }
+            catch (CoreException) { }
+            ComposioHasKey = false;
+            ComposioApps = new List<JsonObject>();
+            settingsWindow?.Rebuild();
+        }
+
+        public async void ConnectComposioApp(string slug)
+        {
+            ComposioError = "";
+            ComposioConnecting = slug;
+            settingsWindow?.Rebuild();
+            try { await Core.Request("composio.connect", new JsonObject { ["app"] = slug }); }
+            catch (CoreException error)
+            {
+                ComposioConnecting = "";
+                ComposioError = error.Message;
+                settingsWindow?.Rebuild();
+            }
+        }
+
+        public async void DisconnectComposioApp(string slug)
+        {
+            try { await Core.Request("composio.disconnect", new JsonObject { ["app"] = slug }, 40000); }
+            catch (CoreException error) { ComposioError = error.Message; }
+            await RefreshComposioApps();
+        }
+
+        public void ConfigureComposioApp(string slug, bool? enabled = null, bool? readOnly = null)
+        {
+            var app = ComposioApps.FirstOrDefault(a => a.Str("slug") == slug);
+            var values = new JsonObject { ["app"] = slug };
+            if (enabled.HasValue) { values["enabled"] = enabled.Value; if (app != null) app["enabled"] = enabled.Value; }
+            if (readOnly.HasValue) { values["readOnly"] = readOnly.Value; if (app != null) app["readOnly"] = readOnly.Value; }
+            Core.Send("composio.configure", values);
+        }
+
         public void SaveApiKey(string key)
         {
             if (key.Length == 0) CredentialStore.Delete("llm/apiKey");
@@ -576,6 +686,7 @@ namespace Murmur
         {
             RefreshConnectors(() => settingsWindow?.Rebuild());
             _ = RefreshChatGpt();
+            _ = RefreshComposio();
             settingsWindow ??= new SettingsWindow(this);
             settingsWindow.Rebuild();
             settingsWindow.Show();

@@ -11,6 +11,7 @@ struct SettingsView: View {
             DictationSettings().tabItem { Label(L("settings.tab.dictation"), systemImage: "waveform") }
             AgentSettings().tabItem { Label(L("settings.tab.agent"), systemImage: "sparkles") }
             ConnectorSettings().tabItem { Label(L("settings.tab.connectors"), systemImage: "puzzlepiece.extension") }
+            AppsSettings().tabItem { Label(L("settings.tab.apps"), systemImage: "square.grid.2x2") }
             PrivacySettings().tabItem { Label(L("settings.tab.privacy"), systemImage: "hand.raised") }
         }
         .padding(Space.l)
@@ -320,6 +321,105 @@ struct PrivacySettings: View {
 }
 
 /// Sign in with a ChatGPT account: Murmur shows a code, the user enters it on OpenAI's page.
+/// Composio: the key, then every app you can connect, with a switch and a read-only option for each.
+struct AppsSettings: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var strings: Strings
+    @State private var key = ""
+    @State private var query = ""
+    @FocusState private var keyFocused: Bool
+
+    var body: some View {
+        Form {
+            Section {
+                Text(L("settings.apps.intro")).font(.callout).foregroundStyle(.secondary)
+                if model.composio.hasKey {
+                    HStack {
+                        Label(L("settings.apps.key_saved"), systemImage: "key.fill")
+                        Spacer()
+                        Button(L("settings.apps.remove_key")) { model.removeComposioKey() }
+                    }
+                } else {
+                    HStack {
+                        SecureField(L("settings.apps.key"), text: $key)
+                            .focused($keyFocused)
+                            .onSubmit(commitKey)
+                        Button(L("approval.save"), action: commitKey)
+                    }
+                    Text(L("settings.apps.key_help")).font(.caption).foregroundStyle(.secondary)
+                }
+                if let error = model.composio.error {
+                    Text(L("settings.apps.failed", ["error": error])).font(.caption).foregroundStyle(.red)
+                }
+            }
+            if model.composio.hasKey {
+                Section {
+                    TextField(L("settings.apps.search"), text: $query)
+                        .onSubmit { model.refreshComposioApps(query: query) }
+                    if model.composio.apps.isEmpty && !model.composio.loading {
+                        Text(L("settings.apps.empty")).foregroundStyle(.secondary)
+                    }
+                    ForEach(model.composio.apps.prefix(60)) { app in appRow(app) }
+                    if model.composio.loading { ProgressView().controlSize(.small) }
+                }
+                Section { Text(L("settings.apps.privacy")).font(.caption).foregroundStyle(.secondary) }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear { model.refreshComposio() }
+        .onChange(of: keyFocused) { focused in
+            if !focused { commitKey() }
+        }
+        .onDisappear(perform: commitKey)
+    }
+
+    private func appRow(_ app: ComposioApp) -> some View {
+        HStack(alignment: .top, spacing: Space.m) {
+            Image(systemName: app.connected ? "checkmark.circle.fill" : "circle.dashed")
+                .foregroundStyle(app.connected ? Color.green : Color.secondary)
+                .frame(width: 24)
+                .accessibilityLabel(app.connected ? L("settings.apps.connected") : "")
+            VStack(alignment: .leading, spacing: 2) {
+                Text(app.name).font(.body.weight(.medium))
+                if !app.description.isEmpty {
+                    Text(app.description).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
+                if app.connected {
+                    Toggle(L("settings.apps.read_only"), isOn: Binding(
+                        get: { app.readOnly },
+                        set: { model.configureComposioApp(app.slug, readOnly: $0) }
+                    ))
+                    .font(.caption)
+                    .toggleStyle(.checkbox)
+                }
+                if model.composio.connecting == app.slug {
+                    Text(L("settings.apps.waiting")).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if app.connected {
+                Toggle(L("settings.apps.use"), isOn: Binding(
+                    get: { app.enabled },
+                    set: { model.configureComposioApp(app.slug, enabled: $0) }
+                ))
+                .labelsHidden()
+                .accessibilityLabel("\(app.name): \(L("settings.apps.use"))")
+                Button(L("settings.apps.disconnect")) { model.disconnectComposioApp(app.slug) }
+            } else {
+                Button(L("settings.apps.connect")) { model.connectComposioApp(app.slug) }
+                    .disabled(model.composio.connecting != nil)
+            }
+        }
+    }
+
+    private func commitKey() {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        model.saveComposioKey(trimmed)
+        key = ""
+    }
+}
+
 struct ChatGptSection: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var strings: Strings

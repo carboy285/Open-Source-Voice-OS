@@ -236,5 +236,22 @@
   "models.ready": "{name} の準備ができました",
   "models.ready_body": "ホットキーを押しながら話してください。",
   "onboarding.model.title": "音声モデル",
-  "onboarding.model.body": "Murmur は NVIDIA Parakeet を使って、この Mac の中で音声を文字にします。最初に一度だけダウンロードしてください (約 {size} MB)。音声はどこにも送信されません。"
+  "onboarding.model.body": "Murmur は NVIDIA Parakeet を使って、この Mac の中で音声を文字にします。最初に一度だけダウンロードしてください (約 {size} MB)。音声はどこにも送信されません。",
+  "settings.tab.apps": "アプリ",
+  "settings.apps.intro": "Composio を通して Gmail、Google カレンダー、Slack、Notion など数百のアプリをつなぎ、エージェントが使えるようにします。サインインは各アプリのページで行います。",
+  "settings.apps.key": "Composio API キー",
+  "settings.apps.key_help": "composio.dev で無料のキーを取得できます。キーは Murmur がキーチェーンに保存します。",
+  "settings.apps.key_saved": "Composio のキーを保存しました",
+  "settings.apps.remove_key": "キーを削除",
+  "settings.apps.search": "アプリを検索",
+  "settings.apps.connect": "接続",
+  "settings.apps.disconnect": "接続を解除",
+  "settings.apps.connected": "接続済み",
+  "settings.apps.waiting": "開いたページでサインインを完了してください…",
+  "settings.apps.use": "エージェントが使う",
+  "settings.apps.read_only": "読み取り専用",
+  "settings.apps.failed": "接続できませんでした: {error}",
+  "settings.apps.empty": "アプリが見つかりません。",
+  "settings.apps.privacy": "エージェントがこれらのアプリから読む内容は Composio のサーバーを通ります。送信や変更を伴う操作は、これまで通り先にプレビューが表示されます。",
+  "settings.apps.need_key": "アプリを接続するには Composio のキーを追加してください。"
 }

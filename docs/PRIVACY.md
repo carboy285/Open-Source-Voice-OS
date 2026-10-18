@@ -35,6 +35,7 @@ Murmur makes a network call only to a provider you set up:
 - your model provider for the agent and for optional text polish
 - your search provider for web search
 - services you connect (Gmail, Slack and so on) with your own OAuth client
+- Composio (`backend.composio.dev`), only if you add a Composio API key in Settings › Apps
 - MCP servers you add
 
 Speech recognition runs locally. The only speech-related network traffic is downloading a model when you click Download: the file comes from huggingface.co (ggml-org/parakeet-GGUF), is checked against the SHA-256 Hugging Face publishes for it, and is stored in `models/` next to the database. With a model downloaded and a local model server for the agent, Murmur works fully offline.
@@ -52,3 +53,13 @@ Anonymous diagnostics are off by default. The setting exists, but this version h
 ## Signing in with ChatGPT
 
 If you choose "ChatGPT subscription" for the agent, Murmur asks OpenAI for a one-time code, you enter it on OpenAI's page, and Murmur keeps the resulting sign-in in your keychain (macOS Keychain or Windows Credential Manager), the same place an API key goes. Your text then goes to OpenAI under your ChatGPT account, and your plan's usage limits apply. Signing out, or "Delete all data", removes the stored sign-in. Murmur does not read the files of any other app, including the Codex command-line tool.
+
+## Connecting apps through Composio
+
+Settings › Apps lets you connect Gmail, Google Calendar, Slack, Notion and other apps through [Composio](https://composio.dev). You paste your own Composio API key; Murmur keeps it in your keychain. Signing in to an app happens on that app's page in your browser, and Composio holds the resulting access, not Murmur. Murmur sends Composio a random id for this install, so connections are kept apart from other people's using the same key.
+
+When the agent uses a connected app, the request and the app's reply (for example the emails it read) pass through Composio's servers, and then on to your model provider. Composio's own terms and privacy policy apply to that traffic. Each app has a switch ("Agent can use it") and a "Read only" option that hides every tool that sends or changes something. Anything that sends, books, changes or deletes still shows you a preview first, and Murmur decides what counts as a change from the tool's name, so a tool it doesn't recognise is treated as a change. Disconnecting an app in Settings removes it from Composio; removing the key stops Murmur from reaching it. "Delete all data" removes the key.
+
+## Mail, Calendar and Reminders on a Mac
+
+On a Mac, three connectors (off until you turn them on in Settings › Connectors) let the agent use the apps you already have. Calendar and Reminders go through Apple's EventKit; Mail is read with a short AppleScript. macOS asks you to allow each one the first time it is used, and you can take that back in System Settings › Privacy & Security. Nothing leaves your Mac for these, except that what the agent reads is sent to your model provider so it can summarize it. The Mail connector can read your inbox and open a draft in Mail; it cannot send. Its search looks at the latest 200 messages.

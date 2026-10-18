@@ -36,6 +36,7 @@ namespace Murmur
             tabs.Items.Add(Tab(L.T("settings.tab.dictation"), Dictation()));
             tabs.Items.Add(Tab(L.T("settings.tab.agent"), Agent()));
             tabs.Items.Add(Tab(L.T("settings.tab.connectors"), Connectors()));
+            tabs.Items.Add(Tab(L.T("settings.tab.apps"), Apps()));
             tabs.Items.Add(Tab(L.T("settings.tab.privacy"), Privacy()));
             tabs.SelectedIndex = Math.Max(0, selected);
         }
@@ -232,6 +233,61 @@ namespace Murmur
                 try { await app.Core.Request("mcp.reload"); } catch (CoreException) { }
                 app.RefreshConnectors(Rebuild);
             }));
+            return column;
+        }
+
+        private UIElement Apps()
+        {
+            var column = Ui.Column(8, Ui.Text(L.T("settings.apps.intro"), Theme.Body, secondary: true));
+            if (app.ComposioHasKey)
+            {
+                column.Children.Add(Ui.Row(
+                    Ui.Text(L.T("settings.apps.key_saved")),
+                    Ui.Button(L.T("settings.apps.remove_key"), () => app.RemoveComposioKey())));
+            }
+            else
+            {
+                var key = new PasswordBox { Width = 320, Padding = new Thickness(6, 4, 6, 4) };
+                AutomationProperties.SetName(key, L.T("settings.apps.key"));
+                column.Children.Add(Ui.Text(L.T("settings.apps.key"), Theme.Body, FontWeights.SemiBold));
+                column.Children.Add(Ui.Row(key, Ui.Button(L.T("approval.save"), () => { app.SaveComposioKey(key.Password); key.Clear(); })));
+                column.Children.Add(Ui.Text(L.T("settings.apps.key_help"), Theme.Caption, secondary: true));
+            }
+            if (app.ComposioError.Length > 0)
+            {
+                var failed = Ui.Text(L.T("settings.apps.failed", ("error", app.ComposioError)), Theme.Caption);
+                failed.Foreground = Theme.Warning;
+                column.Children.Add(failed);
+            }
+            if (!app.ComposioHasKey) return column;
+
+            var search = Ui.Input("", L.T("settings.apps.search"));
+            search.KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) _ = app.RefreshComposioApps(search.Text); };
+            column.Children.Add(search);
+            if (app.ComposioApps.Count == 0 && !app.ComposioLoading) column.Children.Add(Ui.Text(L.T("settings.apps.empty"), Theme.Body, secondary: true));
+            foreach (var item in app.ComposioApps.Take(60))
+            {
+                var slug = item.Str("slug");
+                var connected = item.Bool("connected");
+                var details = Ui.Column(2, Ui.Text(item.Str("name"), Theme.Body, FontWeights.SemiBold));
+                if (item.Str("description").Length > 0) details.Children.Add(Ui.Text(item.Str("description"), Theme.Caption, secondary: true));
+                if (connected)
+                {
+                    details.Children.Add(Ui.Toggle(L.T("settings.apps.read_only"), item.Bool("readOnly"), on => app.ConfigureComposioApp(slug, readOnly: on)));
+                }
+                if (app.ComposioConnecting == slug) details.Children.Add(Ui.Text(L.T("settings.apps.waiting"), Theme.Caption, secondary: true));
+                var actions = connected
+                    ? Ui.Row(
+                        Ui.Toggle(L.T("settings.apps.use"), item.Bool("enabled", true), on => app.ConfigureComposioApp(slug, enabled: on)),
+                        Ui.Button(L.T("settings.apps.disconnect"), () => app.DisconnectComposioApp(slug)))
+                    : Ui.Row(Ui.Button(L.T("settings.apps.connect"), () => app.ConnectComposioApp(slug)));
+                var row = new DockPanel();
+                DockPanel.SetDock(actions, Dock.Right);
+                row.Children.Add(actions);
+                row.Children.Add(details);
+                column.Children.Add(Ui.Card(row));
+            }
+            column.Children.Add(Ui.Text(L.T("settings.apps.privacy"), Theme.Caption, secondary: true));
             return column;
         }
 

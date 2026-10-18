@@ -11,6 +11,7 @@ let package = Package(
             path: "Sources/Murmur",
             linkerSettings: [
                 .linkedFramework("AppKit"),
+                .linkedFramework("EventKit"),
                 .linkedFramework("AVFoundation"),
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("Security"),

@@ -1,4 +1,6 @@
 import { rmSync } from "node:fs";
+import { ComposioHost, ComposioService, type ComposioEvent } from "../composio/service.js";
+import { COMPOSIO_KEY } from "../composio/client.js";
 import { builtinConnectors } from "../connectors/index.js";
 import { randomUUID } from "node:crypto";
 import { authorizeUrl, createPkce, exchangeCode, saveTokens, tokenKey, waitForRedirect } from "../connectors/oauth.js";
@@ -60,7 +62,8 @@ export type CoreEvent =
   | { type: "reminder.fire"; id: number; text: string; missed: boolean }
   | { type: "models.progress"; id: string; received: number; total?: number }
   | { type: "models.done"; id: string; ok: boolean; error?: string }
-  | { type: "chatgpt.login"; state: "waiting" | "done" | "failed"; error?: string };
+  | { type: "chatgpt.login"; state: "waiting" | "done" | "failed"; error?: string }
+  | ComposioEvent;
 
 export interface ChangeSummary {
   category: ChangeCategory;
@@ -75,6 +78,13 @@ export interface ShellBridge {
   secrets: SecretStore;
   approvals: ApprovalUi;
   emit(event: CoreEvent): void;
+  /** Opens an https page in the user's browser. */
+  openUrl?(url: string): Promise<void>;
+  /**
+   * Calls the Mac app's own Mail, Calendar and Reminders support. Present on macOS only; its presence adds the
+   * Apple connectors.
+   */
+  native?(service: string, action: string, args: Record<string, unknown>): Promise<unknown>;
 }
 
 export interface CoreOptions {
@@ -100,6 +110,7 @@ export class MurmurCore {
   dictionary!: DictionaryRepo;
   history!: DictationHistoryRepo;
   chatgpt!: ChatGptSession;
+  composio!: ComposioService;
   tasks!: TaskRepo;
   reminders!: ReminderRepo;
   learner!: CorrectionLearner;
@@ -159,13 +170,24 @@ export class MurmurCore {
       settingsFor: (id) => this.settings.get("connectors.settings")[id] ?? {},
     };
     this.registry = new ConnectorRegistry(state, (id) => this.connectorContext(id)).register(
-      ...builtinConnectors(this.reminders),
+      ...builtinConnectors(this.reminders, this.options.bridge.native),
     );
+    this.composio = new ComposioService({
+      secrets: this.secrets,
+      settings: this.settings,
+      emit: (event) => this.emit(event),
+      openUrl: async (url) => {
+        if (!this.options.bridge.openUrl) throw new Error("Open this link to sign in: " + url);
+        await this.options.bridge.openUrl(url);
+      },
+      fetch: this.options.fetch,
+    });
     this.runner = new TaskRunner({
       llm: () => this.llm(),
       // Proxy so a reloaded MCP manager is picked up without rebuilding the runner.
       tools: new CompositeToolHost([
         this.registry,
+        new ComposioHost(this.composio),
         { list: () => this.mcp.list(), call: (name, input) => this.mcp.call(name, input) },
       ]),
       approvals: this.options.bridge.approvals,
@@ -556,7 +578,7 @@ export class MurmurCore {
   async deleteAll(): Promise<void> {
     const indexed = this.settings.get("secrets.index");
     const config = await loadConfig(this.mcpPath).catch(() => ({ servers: {} }));
-    const known = [LLM_KEY, WEB_SEARCH_KEY, ...this.registry.catalog().map((c) => tokenKey(c.id))];
+    const known = [LLM_KEY, WEB_SEARCH_KEY, COMPOSIO_KEY, ...this.registry.catalog().map((c) => tokenKey(c.id))];
     for (const key of new Set([...indexed, ...known])) await this.options.bridge.secrets.delete(key).catch(() => {});
     for (const server of Object.values(config.servers))
       await forgetSecrets(server, this.options.bridge.secrets).catch(() => {});
