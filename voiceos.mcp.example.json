@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "rea": {
+      "command": "npx",
+      "args": ["-y", "rea-agents@6.5.0", "mcp"],
+      "env": { "GHIDRA_INSTALL_DIR": "/absolute/path/to/ghidra_12.1.4_PUBLIC" }
+    }
+  }
+}
