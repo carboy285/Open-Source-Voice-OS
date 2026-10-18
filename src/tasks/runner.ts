@@ -3,6 +3,7 @@ import type { AppContext, Clock, LlmProvider, ToolHost } from "../core/types.js"
 import { systemClock } from "../core/types.js";
 import { ApprovalGate, type ApprovalUi } from "../gate/gate.js";
 import { runAgent, type AgentOutcome } from "../modes/agent.js";
+import type { Conversation } from "../modes/conversation.js";
 import { MemoryTaskStore, type TaskRecord, type TaskStatus, type TaskStore } from "./types.js";
 
 export interface TaskUpdate {
@@ -24,6 +25,8 @@ export interface TaskRunnerOptions {
   saveTranscripts?: () => boolean;
   /** IANA zone of the user; the agent is told the date and time in it. */
   timeZone?: () => string;
+  /** What the agent remembers between requests. Without it every request starts from nothing. */
+  conversation?: Conversation;
   /** BCP 47 locale for dates on approval cards. */
   locale?: () => string;
   limits?: () => { maxSteps?: number; maxWallMs?: number; approvalTimeoutMs?: number };
@@ -133,6 +136,7 @@ export class TaskRunner {
         context: entry.context,
         clock: this.clock,
         timeZone: this.options.timeZone?.(),
+        history: this.options.conversation?.messages(),
         signal: entry.controller.signal,
         maxSteps: limits.maxSteps,
         maxWallMs: limits.maxWallMs,
@@ -151,6 +155,9 @@ export class TaskRunner {
       return this.finish(entry, "failed", error instanceof Error ? error.message : String(error));
     }
     clearTimeout(timer);
+    if (outcome.status !== "cancelled" && outcome.status !== "failed" && outcome.reply) {
+      this.options.conversation?.add({ request: entry.transcript, reply: outcome.reply, actions: outcome.trace });
+    }
     const status: TaskStatus =
       outcome.status === "done" ? "done" : outcome.status === "cancelled" ? "cancelled" : "failed";
     return this.finish(entry, status, outcome.reply);

@@ -9,6 +9,11 @@ enum ShellState: String {
     var menuKey: String { "menu.state.\(rawValue)" }
 }
 
+/// What the typing box sends to: the agent, or an edit of the selected text.
+enum TypingMode: Equatable {
+    case ask, edit
+}
+
 /// The ChatGPT sign-in as the Settings screen shows it.
 struct ChatGptState {
     var signedIn = false
@@ -67,6 +72,15 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     @Published var apiKeyError: String?
     @Published var chatgpt = ChatGptState()
     @Published var composio = ComposioState()
+    /// The typing box in the notch (⌃⌥T): the same Ask and Edit as the hotkey, without speaking.
+    @Published var typingOpen = false { didSet { windows.updateNotch() } }
+    @Published var typingMode: TypingMode = .ask
+    @Published var typingSelectionLength = 0
+    /// True while a reply is being read aloud.
+    @Published var speaking = false
+    let speaker = Speaker()
+    /// The app and selection seen before the box took focus; sent with the request.
+    private var typingContext: JSONObject = [:]
     @Published var micStatus = Permissions.microphone
     @Published var axStatus = Permissions.accessibility
     @Published var screenStatus = Permissions.screenRecording
@@ -109,7 +123,9 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             guard let self, self.state == .listening else { return }
             self.action = action
         }
+        speaker.onChange = { [weak self] speaking in self?.speaking = speaking }
         hotkey.onEscape = { [weak self] in self?.cancelListening() }
+        hotkey.onTypeShortcut = { [weak self] in self?.toggleTyping() }
         hotkey.onFocusShortcut = { [weak self] in self?.windows.notch.focusApproval() }
         // Creating the event tap without permission files a TCC request on every launch, so check first.
         if Permissions.accessibility == .granted {
@@ -223,6 +239,9 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     private func hotkeyDown(_ action: HotkeyAction) {
         // A press during the release tail of the previous recording is ignored.
         guard state != .starting, !audio.isRecording else { return }
+        // Talking over the reply, and the microphone hearing it, are both worse than stopping it.
+        speaker.stop()
+        closeTyping()
         self.action = action
         pressStarted = Date()
         // Setting the state shows the listening surface right away.
@@ -279,6 +298,75 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             }
         }
     }
+
+    // MARK: Typing
+
+    func toggleTyping() {
+        if typingOpen { closeTyping() } else { openTyping(.ask) }
+    }
+
+    /// Opens the typing box. The app and selection are read first, while the user's app still has focus.
+    func openTyping(_ mode: TypingMode) {
+        guard state != .listening, !audio.isRecording else { return }
+        speaker.stop()
+        typingContext = ContextCapture.capture()
+        typingSelectionLength = (typingContext["selection"] as? String)?.count ?? 0
+        typingMode = mode
+        reportTimer?.invalidate()
+        reportVisible = false
+        typingOpen = true
+    }
+
+    func closeTyping() {
+        if typingOpen { typingOpen = false }
+    }
+
+    /// Sends what was typed, then returns focus to the user's app (the notch does that when the box closes).
+    func submitTyping(_ text: String) {
+        let request = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !request.isEmpty else { return }
+        let mode = typingMode
+        let context = typingContext
+        closeTyping()
+        speaker.stop()
+        reportTimer?.invalidate()
+        reportVisible = false
+        switch mode {
+        case .ask:
+            action = .agent
+            state = .agent
+            core.request("agent.run", ["transcript": request, "context": context], timeout: 60) { [weak self] result in
+                if case let .failure(error) = result { self?.showError(error.localizedDescription) }
+            }
+        case .edit:
+            action = .edit
+            state = .cleaning
+            core.request("edit.run", ["transcript": request, "context": context], timeout: 120) { [weak self] result in
+                switch result {
+                case .success: self?.finishQuietly()
+                case let .failure(error): self?.showError(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// Forgets the conversation: the next request starts from nothing.
+    func newChat() {
+        speaker.stop()
+        core.request("conversation.reset") { [weak self] _ in
+            guard let self else { return }
+            self.report = []
+            self.reportMessage = L("chat.new_started")
+            self.state = .done
+            self.showReport(seconds: 3)
+        }
+    }
+
+    func speakSample() {
+        speaker.speak(L("settings.tts.sample"), voiceId: settings["tts.voice"] as? String ?? "", rate: settings["tts.rate"] as? Double ?? 0.5)
+    }
+
+    func stopSpeaking() { speaker.stop() }
 
     func cancelListening() {
         _ = audio.stop()
@@ -416,6 +504,9 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                 showPanel()
             }
             if !info.isActive {
+                if info.status == "done", previous?.isActive ?? true, !info.reply.isEmpty, settings["tts.enabled"] as? Bool ?? true {
+                    speaker.speak(info.reply, voiceId: settings["tts.voice"] as? String ?? "", rate: settings["tts.rate"] as? Double ?? 0.5)
+                }
                 if !info.long {
                     report = []
                     reportMessage = info.reply

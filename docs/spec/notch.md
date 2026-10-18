@@ -31,7 +31,17 @@ The notch area is found from the screen's safe-area insets and the auxiliary top
 3. **Change reports** show after listening ends. If an approval is pending, the report is shown first for its 6 s, then the approval returns.
 4. **Task progress** shows only when nothing above needs the notch.
 
+The **typing box** (below) sits between listening and change reports: it is opened by the user, so it outranks a report or an approval that arrives meanwhile; those wait behind it.
+
 When a surface is replaced, it shrinks back into the notch along the path it came out, and the next one grows out.
+
+## Typing box
+
+For people who can't or would rather not speak. ⌃⌥T (or Ask by typing… in the menu) opens a card that grows out of the notch with a text field, an Ask / Edit switch, New chat, a Send button and a close button. The app and the selection are read **before** the card takes focus, and sent with the request, so Edit still works on the text the user had selected. Return sends; Esc or the close button closes. Clicking into another app closes it, and holding the dictation key closes it. After sending, the card closes, focus goes back to the user's app, and the reply shows as usual (and is read aloud if Spoken replies is on). It never opens while the microphone is open.
+
+## Spoken replies
+
+Agent replies are read aloud with the Mac's own voices when Read replies aloud is on (Settings › Agent): the chosen voice, or the best installed voice for the reply's language, at the chosen speed. Speech stops when the dictation key is pressed, when the typing box opens, when a new request is sent, or from the speaker button on the reply card. Nothing is sent anywhere for speech.
 
 ## Keyboard and focus
 

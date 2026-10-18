@@ -175,6 +175,8 @@ struct AgentSettings: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var strings: Strings
     @State private var apiKey = ""
+    @State private var rate = 0.5
+    @State private var voices = Speaker.choices()
     @FocusState private var keyFocused: Bool
 
     private var provider: String { model.settings["llm.provider"] as? String ?? "none" }
@@ -210,8 +212,28 @@ struct AgentSettings: View {
             if !model.llmReady {
                 Text(L("settings.llm.missing")).font(.callout).foregroundStyle(.orange)
             }
+            Section(L("settings.tts.title")) {
+                Toggle(L("settings.tts.enabled"), isOn: flag(model, "tts.enabled", default: true))
+                Picker(L("settings.tts.voice"), selection: text(model, "tts.voice")) {
+                    Text(L("settings.tts.voice.auto")).tag("")
+                    ForEach(voices) { Text($0.label).tag($0.id) }
+                }
+                Slider(
+                    value: $rate,
+                    in: 0.2...0.8,
+                    label: { Text(L("settings.tts.rate")) },
+                    onEditingChanged: { editing in
+                        if !editing { model.setSetting("tts.rate", rate) }
+                    }
+                )
+                HStack {
+                    Button(L("settings.tts.test")) { model.speakSample() }
+                    Text(L("settings.tts.help")).font(.caption).foregroundStyle(.secondary)
+                }
+            }
         }
         .formStyle(.grouped)
+        .onAppear { rate = model.settings["tts.rate"] as? Double ?? 0.5 }
         .onChange(of: keyFocused) { focused in
             if !focused { commitKey() }
         }

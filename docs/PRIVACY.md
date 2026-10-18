@@ -63,3 +63,7 @@ When the agent uses a connected app, the request and the app's reply (for exampl
 ## Mail, Calendar and Reminders on a Mac
 
 On a Mac, three connectors (off until you turn them on in Settings › Connectors) let the agent use the apps you already have. Calendar and Reminders go through Apple's EventKit; Mail is read with a short AppleScript. macOS asks you to allow each one the first time it is used, and you can take that back in System Settings › Privacy & Security. Nothing leaves your Mac for these, except that what the agent reads is sent to your model provider so it can summarize it. The Mail connector can read your inbox and open a draft in Mail; it cannot send. Its search looks at the latest 200 messages.
+
+## Conversation memory and spoken replies
+
+The agent remembers the conversation so a follow-up like "move it to 4" makes sense: your earlier requests, its replies, and a short log of which tools ran. This is kept in memory only. It is not written to disk, and it is forgotten after 30 quiet minutes, with New chat, or when Murmur quits. While it lasts, the earlier turns are sent to your model provider with each new request, as part of the request. Spoken replies use your Mac's own voices; the text is not sent anywhere for that.

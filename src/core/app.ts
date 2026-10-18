@@ -15,6 +15,7 @@ import type { ApprovalUi } from "../gate/gate.js";
 import { resolveLocale, t, type Locale } from "../i18n/index.js";
 import { forgetSecrets, loadConfig, type McpConfig } from "../mcp/config.js";
 import { McpManager, type ConnectionFactory } from "../mcp/manager.js";
+import { Conversation } from "../modes/conversation.js";
 import { editSelection } from "../modes/edit.js";
 import { processDictation } from "../modes/dictation.js";
 import { AnthropicLlm } from "../providers/anthropic.js";
@@ -118,6 +119,8 @@ export class MurmurCore {
   mcp: McpManager;
   models: ModelManager;
   runner!: TaskRunner;
+  /** What the agent remembers between requests. */
+  conversation!: Conversation;
   scheduler!: ReminderScheduler;
   readonly secrets: IndexedSecretStore;
 
@@ -182,7 +185,9 @@ export class MurmurCore {
       },
       fetch: this.options.fetch,
     });
+    this.conversation = new Conversation(this.clock);
     this.runner = new TaskRunner({
+      conversation: this.conversation,
       llm: () => this.llm(),
       // Proxy so a reloaded MCP manager is picked up without rebuilding the runner.
       tools: new CompositeToolHost([
@@ -507,11 +512,17 @@ export class MurmurCore {
 
   // Voice edit
 
-  async runEdit(input: { audio?: Pcm16Audio; transcript?: string }): Promise<{ text: string }> {
+  async runEdit(input: {
+    audio?: Pcm16Audio;
+    transcript?: string;
+    /** The app and selection captured before a typing box took focus. */
+    context?: CapturedContext;
+  }): Promise<{ text: string }> {
     const llm = await this.llm();
     if (!llm) throw new Error(this.t("agent.no_llm"));
     const instruction = input.transcript ?? (input.audio ? (await this.transcribe(input.audio)).text : "");
-    const context = (await (this.pendingContext ?? this.options.bridge.captureContext())) as CapturedContext;
+    const context =
+      input.context ?? ((await (this.pendingContext ?? this.options.bridge.captureContext())) as CapturedContext);
     this.pendingContext = undefined;
     const bridge = this.options.bridge;
     const text = await editSelection(

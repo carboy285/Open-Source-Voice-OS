@@ -24,6 +24,11 @@ export const DEFAULT_SETTINGS = {
   "mcp.callTimeoutMs": 60_000,
   "connectors.enabled": ["reminders", "files"] as string[],
   "connectors.settings": {} as Record<string, Record<string, unknown>>,
+  "tts.enabled": true,
+  /** Voice identifier from the shell; empty picks a voice that matches the reply's language. */
+  "tts.voice": "",
+  /** 0 to 1; the shell maps it to its own speech rate. */
+  "tts.rate": 0.5,
   "composio.userId": "",
   "composio.apps": {} as Record<string, { enabled: boolean; readOnly: boolean }>,
   "llm.provider": "none" as "none" | "anthropic" | "openai-compatible" | "chatgpt",

@@ -8,6 +8,7 @@ enum NotchSurface: Equatable {
     case report
     case approval(String)
     case progress(String)
+    case typing
 
     var key: String {
         switch self {
@@ -16,6 +17,7 @@ enum NotchSurface: Equatable {
         case .report: return "report"
         case let .approval(id): return "approval-\(id)"
         case let .progress(id): return "progress-\(id)"
+        case .typing: return "typing"
         }
     }
 
@@ -48,6 +50,7 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
     static let listeningExtra: CGFloat = 30
     static let approvalWidth: CGFloat = 460
     static let reportWidth: CGFloat = 380
+    static let typingWidth: CGFloat = 460
 
     init(model: AppModel) {
         self.model = model
@@ -108,6 +111,11 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
                 width: max(NotchController.approvalWidth, notch.width + 40),
                 height: notch.height + contentHeight("approval")
             )
+        case .typing:
+            return CGSize(
+                width: max(NotchController.typingWidth, notch.width + 40),
+                height: notch.height + contentHeight("typing")
+            )
         }
     }
 
@@ -117,7 +125,7 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
         case .hidden: return 10
         case .listening, .progress: return 16
         case .report: return 18
-        case .approval: return 22
+        case .approval, .typing: return 22
         }
     }
 
@@ -157,6 +165,7 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
         default:
             break
         }
+        if model.typingOpen { return .typing }
         if model.reportVisible { return .report }
         if let first = model.approvals.first { return .approval(first.callId) }
         let longTask = model.activeTasks.first { $0.long }
@@ -184,11 +193,12 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
             let fresh = NotchGeometry(screen: NotchGeometry.pointerScreen())
             if fresh != geometry { geometry = fresh }
         }
-        if previous.isApproval { releaseFocus() }
+        if previous.isApproval || previous == .typing { releaseFocus() }
         if next != .report { reportExpanded = false }
         placePanel()
         surface = next
         if next != .hidden { panel?.orderFrontRegardless() }
+        if next == .typing { focusTyping() }
         announce(next)
         refreshMouse()
     }
@@ -298,6 +308,22 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
         refreshMouse()
     }
 
+    /// The typing box needs the keyboard the moment it opens. The user's app is remembered and gets focus back when it closes.
+    private func focusTyping() {
+        guard let panel else { return }
+        if !focused {
+            let front = NSWorkspace.shared.frontmostApplication
+            if let front, front.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+                previousApp = front
+            }
+        }
+        panel.allowsKey = true
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+        focused = true
+        refreshMouse()
+    }
+
     /// The card closed: give up key status and hand focus back to the app that had it.
     private func releaseFocus() {
         guard focused || panel?.allowsKey == true else { return }
@@ -316,6 +342,8 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
         focused = false
         panel?.allowsKey = false
         previousApp = nil
+        // Clicking into another app abandons a half-typed request; an approval, by contrast, stays.
+        if surface == .typing { model.closeTyping() }
     }
 
     // MARK: Report
@@ -350,6 +378,8 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
         case let .progress(id):
             guard let task = model.tasks[id] else { return }
             text = task.currentStep ?? L("panel.status.\(task.status)")
+        case .typing:
+            text = L("typing.announce")
         }
         guard !text.isEmpty else { return }
         NSAccessibility.post(

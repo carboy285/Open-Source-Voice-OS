@@ -103,6 +103,17 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 5. Ask for something unusual (an MCP tool): a generic card with the first few values, never a blank card.
 6. System Settings › Accessibility › Display: turn on Reduce Motion (rows just fade, no rise or blur), then Reduce Transparency (plain black, no gradient or glow).
 
+### 4.45 Typing, conversation and spoken replies
+
+1. Press ⌃⌥T. A card grows out of the notch with a text field that already has the cursor, an Ask / Edit switch, "New chat" and Send. Your app keeps its place: type, press Return, and the app you were in gets focus back.
+2. In Ask, type "What time is it?" and press Return. The reply shows and is read aloud in a natural voice, in the language of the reply. Press the dictation key: the voice stops at once.
+3. Follow up without repeating anything: type "And tomorrow?" or "Make that an hour later." The answer clearly uses the first exchange (it knows what "that" is).
+4. Ask by voice (hold the Ask hotkey) "What did I just ask you?" It knows. Then press ⌃⌥T, click New chat, and ask the same again: it no longer knows.
+5. Wait 30 minutes (or restart Murmur) and ask a follow-up: it starts fresh.
+6. Select a paragraph in Notes, press ⌃⌥T, switch to Edit, type "make it shorter" and press Return. The selection is replaced in Notes. With nothing selected, the card says the result goes at the cursor.
+7. Press ⌃⌥T, then click into another app: the box closes without sending. Press ⌃⌥T while holding the dictation key: nothing opens.
+8. Settings › Agent › Spoken replies: turn Read replies aloud off and ask again (silent). Pick another voice and press Test voice. Move the Speed slider and test again. While a reply is speaking, the reply card shows a small speaker button that stops it.
+
 ### 4.5 Apps through Composio
 
 1. Settings › Apps shows a field for a Composio API key. Paste a wrong key: you see "Composio didn't accept the API key". Paste a real one: the key is saved and a list of apps appears, with the most used first.
@@ -188,7 +199,7 @@ Use the left Option key for ⌃⌥A: Right Option is the dictation hotkey.
 
 | #   | Do                                                                                    | Expect                                                                                                                               |
 | --- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 9.1 | Settings › General                                                                    | Shows "Version 0.2.4" and a Check for Updates button                                                                                 |
+| 9.1 | Settings › General                                                                    | Shows "Version 0.2.5" and a Check for Updates button                                                                                 |
 | 9.2 | Click Check for Updates with no newer release published                               | "Murmur is up to date"                                                                                                               |
 | 9.3 | After a newer release is published, wait up to a minute after launch (or click Check) | A notification and a menu item "Install Murmur x.y.z and Restart"                                                                    |
 | 9.4 | Choose Install                                                                        | "Downloading…", then Murmur quits and reopens as the new version. macOS may ask for Accessibility and Input Monitoring again         |

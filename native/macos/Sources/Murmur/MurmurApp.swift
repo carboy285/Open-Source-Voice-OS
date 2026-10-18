@@ -57,6 +57,9 @@ struct MenuContent: View {
                 ForEach(Array(model.recent.enumerated()), id: \.offset) { _, item in Text(item) }
             }
         }
+        Button(L("menu.type")) { model.openTyping(.ask) }
+            .keyboardShortcut("t", modifiers: [.control, .option])
+        Button(L("menu.new_chat")) { model.newChat() }
         Button(L("menu.tasks")) { model.showPanel() }
             .keyboardShortcut("t")
         Button(L("menu.settings")) { model.windows.showSettings() }

@@ -133,6 +133,41 @@ describe("core ↔ shell protocol", () => {
     expect(core.reminders.list()).toEqual([]);
   });
 
+  it("remembers a typed conversation between requests, and starts over on reset", async () => {
+    const llm = new ScriptedLlm([
+      { text: "Your dentist is at 3pm.", toolCalls: [] },
+      { text: "Okay, 4pm it is.", toolCalls: [] },
+      { text: "I don't know what you mean.", toolCalls: [] },
+    ]);
+    const { shell, waitFor } = await start(llm);
+    const ask = async (transcript: string) => {
+      const { taskId } = await shell.request<{ taskId: string }>("agent.run", { transcript });
+      await waitFor("task.update", (p) => p.taskId === taskId && p.status === "done");
+    };
+    await ask("what time is my dentist");
+    await ask("move it to 4");
+    const second = llm.requests[1]!.messages;
+    expect(second.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(await shell.request("conversation.status")).toEqual({ turns: 2 });
+
+    await shell.request("conversation.reset");
+    expect(await shell.request("conversation.status")).toEqual({ turns: 0 });
+    await ask("and the one after that?");
+    expect(llm.requests[2]!.messages).toHaveLength(1);
+  });
+
+  it("edits typed instructions against the selection captured before the box opened", async () => {
+    const llm = new ScriptedLlm([{ text: "Shorter text.", toolCalls: [] }]);
+    const { shell, inserted } = await start(llm);
+    await shell.request("edit.run", {
+      transcript: "make it shorter",
+      context: { appName: "Notes", selection: "A very long text that goes on." },
+    });
+    expect(inserted).toEqual(["Shorter text."]);
+    const sent = llm.requests[0]!.messages.map((m) => (m.role === "user" ? m.text : "")).join("\n");
+    expect(sent).toContain("A very long text that goes on.");
+  });
+
   it("rejects bad approval responses and offers to delete transcripts when turned off", async () => {
     const { shell } = await start();
     await expect(shell.request("approval.respond", { callId: "x", decision: "yes" })).rejects.toMatchObject({

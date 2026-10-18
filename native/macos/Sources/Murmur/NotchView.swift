@@ -142,6 +142,9 @@ struct NotchSurfaceView: View {
                     .id("\(preview.callId)-\(preview.edited)-\(preview.confirming)-\(preview.errors.count)")
                     .transition(.opacity)
             }
+        case .typing:
+            TypingContent(notch: notch, width: width)
+                .transition(.opacity)
         }
     }
 }
@@ -338,6 +341,16 @@ struct ReportContent: View {
                 .font(.headline)
                 .foregroundStyle(.white)
             Spacer()
+            if model.speaking {
+                Button {
+                    model.stopSpeaking()
+                } label: {
+                    Image(systemName: "speaker.slash.fill").font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(L("report.stop_speaking"))
+            }
             if expandable {
                 Button {
                     controller.reportExpanded.toggle()
@@ -442,6 +455,103 @@ struct ApprovalCard: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
+    }
+}
+
+// MARK: Typing
+
+/// A text box for Ask and Edit, for when you can't or would rather not speak. Return sends, Esc closes.
+struct TypingContent: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var strings: Strings
+    let notch: CGSize
+    let width: CGFloat
+    @State private var text = ""
+    @FocusState private var fieldFocused: Bool
+
+    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private var prompt: String {
+        model.typingMode == .ask ? L("typing.prompt.ask") : L("typing.prompt.edit")
+    }
+
+    private var hint: String {
+        if model.typingMode == .edit {
+            return model.typingSelectionLength > 0
+                ? L("typing.selection", ["count": String(model.typingSelectionLength)])
+                : L("typing.no_selection")
+        }
+        return L("typing.hint")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.m) {
+            HStack(spacing: Space.m) {
+                Picker(L("typing.mode"), selection: $model.typingMode) {
+                    Text(L("typing.mode.ask")).tag(TypingMode.ask)
+                    Text(L("typing.mode.edit")).tag(TypingMode.edit)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 150)
+                Spacer()
+                Button(L("typing.new_chat")) { model.newChat() }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button {
+                    model.closeTyping()
+                } label: {
+                    Image(systemName: "xmark").font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .keyboardShortcut(.cancelAction)
+                .accessibilityLabel(L("typing.close"))
+            }
+            .fadeIn(0)
+            TextField(prompt, text: $text, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.title3)
+                .foregroundStyle(.white)
+                .lineLimit(1...4)
+                .focused($fieldFocused)
+                .onSubmit(send)
+                .padding(Space.m)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NotchPalette.card))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NotchPalette.hairline, lineWidth: 1))
+                .accessibilityLabel(prompt)
+                .fadeIn(1)
+            HStack {
+                Text(hint).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Spacer()
+                Button(L("typing.send"), action: send)
+                    .buttonStyle(PressableButtonStyle(prominent: true))
+                    .disabled(trimmed.isEmpty)
+            }
+            .fadeIn(2)
+        }
+        .padding(.horizontal, Space.l)
+        .padding(.top, Space.s)
+        .padding(.bottom, Space.l)
+        .frame(width: width, alignment: .leading)
+        .background(GeometryReader { proxy in
+            Color.clear.preference(key: NotchHeightKey.self, value: ["typing": proxy.size.height])
+        })
+        .padding(.top, notch.height)
+        .onAppear {
+            // The panel becomes key a moment after the surface appears.
+            DispatchQueue.main.async { fieldFocused = true }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(L("typing.announce"))
+    }
+
+    private func send() {
+        guard !trimmed.isEmpty else { return }
+        let request = trimmed
+        text = ""
+        model.submitTyping(request)
     }
 }
 

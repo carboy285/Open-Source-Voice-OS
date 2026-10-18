@@ -1,6 +1,6 @@
 # Murmur
 
-Murmur is a voice layer for macOS and Windows: hold a key, speak, and cleaned-up text appears in whatever app you are using. Hold a second key to ask for something instead, and Murmur carries it out through connectors and MCP servers, showing you a preview before anything is sent, booked or changed.
+Murmur is a voice layer for macOS and Windows: hold a key, speak, and cleaned-up text appears in whatever app you are using. Hold a second key to ask for something instead (or press ⌃⌥T and type it; replies can be read aloud, and follow-ups remember the conversation), and Murmur carries it out through connectors and MCP servers, showing you a preview before anything is sent, booked or changed.
 
 ## Requirements
 

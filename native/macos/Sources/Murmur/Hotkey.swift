@@ -17,6 +17,9 @@ final class HotkeyMonitor {
     var onEscape: (() -> Void)?
     /// The notch focus shortcut, ⌃⌥A by default (`notch.md`). ⌃⌥Space is avoided: macOS uses it to switch input sources.
     var onFocusShortcut: (() -> Void)?
+    /// ⌃⌥T opens the typing box (kVK_ANSI_T, same modifiers). Typed Ask and Edit need no microphone.
+    var onTypeShortcut: (() -> Void)?
+    var typeKeyCode: Int64 = 17
     /// kVK_ANSI_A, with Control and Option held.
     var focusKeyCode: Int64 = 0
     var focusModifiers: CGEventFlags = [.maskControl, .maskAlternate]
@@ -83,6 +86,10 @@ final class HotkeyMonitor {
         if type == .keyDown {
             if code == focusKeyCode, isFocusShortcut(event.flags) {
                 DispatchQueue.main.async { self.onFocusShortcut?() }
+                return
+            }
+            if code == typeKeyCode, isFocusShortcut(event.flags) {
+                DispatchQueue.main.async { self.onTypeShortcut?() }
                 return
             }
             if code == 53, isDown || toggleMode { // Esc

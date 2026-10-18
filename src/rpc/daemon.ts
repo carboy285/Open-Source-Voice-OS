@@ -120,8 +120,17 @@ export function registerMethods(peer: JsonRpcPeer, core: MurmurCore, approvals: 
       (p) => core.observeCorrection(str(p.inserted, "inserted"), str(p.corrected, "corrected")) ?? null,
     )
     .handle("edit.run", (p) =>
-      core.runEdit({ audio: decodeAudio(p), transcript: typeof p.transcript === "string" ? p.transcript : undefined }),
+      core.runEdit({
+        audio: decodeAudio(p),
+        transcript: typeof p.transcript === "string" ? p.transcript : undefined,
+        context: p.context && typeof p.context === "object" ? (p.context as CapturedContext) : undefined,
+      }),
     )
+    .handle("conversation.reset", () => {
+      core.conversation.reset();
+      return { ok: true };
+    })
+    .handle("conversation.status", () => ({ turns: core.conversation.length }))
 
     .handle("agent.run", (p) =>
       core.startTask({
