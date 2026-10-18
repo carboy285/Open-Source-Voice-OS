@@ -22,6 +22,8 @@ export interface TaskRunnerOptions {
   store?: TaskStore;
   clock?: Clock;
   saveTranscripts?: () => boolean;
+  /** IANA zone of the user; the agent is told the date and time in it. */
+  timeZone?: () => string;
   limits?: () => { maxSteps?: number; maxWallMs?: number; approvalTimeoutMs?: number };
   onUpdate?: (update: TaskUpdate) => void;
   /** Called when a long task ends, so the shell can post a system notification. */
@@ -126,6 +128,7 @@ export class TaskRunner {
       outcome = await runAgent(entry.transcript, llm, this.options.tools, gate, {
         context: entry.context,
         clock: this.clock,
+        timeZone: this.options.timeZone?.(),
         signal: entry.controller.signal,
         maxSteps: limits.maxSteps,
         maxWallMs: limits.maxWallMs,

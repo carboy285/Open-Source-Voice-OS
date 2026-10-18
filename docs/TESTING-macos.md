@@ -100,6 +100,7 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 2. Search "calendar" and press Return: Google Calendar is in the results.
 3. Click Connect on Google Calendar. Your browser opens Google's sign-in. Finish it: the row gets a green check within a few seconds and shows "Agent can use it" and "Read only".
 4. Hold the agent key and say "What's on my calendar tomorrow?" The answer lists real events and no approval appears (reading is automatic).
+   Also say "What's on my Google Calendar today?" The answer names today's real date (check the weekday and day) and today's events, not another day.
 5. Say "Add lunch with Sam tomorrow at noon to my calendar." An approval appears with the details; Edit works; approving adds the event.
 6. Turn on Read only for Google Calendar, repeat step 5: the agent says it can't add events.
 7. Disconnect Google Calendar, then say "What's on my calendar?" The agent asks to connect it (an approval named "Connect an app"). Approve it, finish the sign-in, and it carries on and answers.

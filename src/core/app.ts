@@ -194,6 +194,7 @@ export class MurmurCore {
       store: this.tasks,
       clock: this.clock,
       saveTranscripts: () => this.settings.get("history.saveTranscripts"),
+      timeZone: localTimeZone,
       limits: () => ({
         maxSteps: this.settings.get("agent.maxSteps"),
         maxWallMs: this.settings.get("agent.maxWallMs"),
