@@ -49,6 +49,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     private var reportTimer: Timer?
     private var restartDelay: TimeInterval = 1
     private var permissionTimer: Timer?
+    private var hotkeyWatch: Timer?
+    private var accessibilityWasGranted = false
 
     var hotkeyName: String { HotkeyMonitor.name(for: hotkey.keyCode) }
     var soundOn: Bool { settings["sound.enabled"] as? Bool ?? true }
@@ -82,6 +84,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         } else {
             startPermissionPolling()
         }
+        accessibilityWasGranted = Permissions.accessibility == .granted
+        watchHotkey()
         if Bundle.main.bundleIdentifier != nil {
             let center = UNUserNotificationCenter.current()
             center.delegate = self
@@ -116,7 +120,9 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     private func registerCoreHandlers() {
         core.handle("text.insert") { params, reply in
             let result = TextInserter.insert(params["text"] as? String ?? "")
-            reply(.success(["ok": result.ok, "method": result.method.rawValue] as JSONObject))
+            var payload: JSONObject = ["ok": result.ok, "method": result.method.rawValue]
+            if let reason = result.reason { payload["reason"] = reason }
+            reply(.success(payload))
         }
         core.handle("context.capture") { _, reply in reply(.success(ContextCapture.capture())) }
         core.handle("secret.get") { params, reply in
@@ -547,6 +553,27 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             self.screenStatus = Permissions.screenRecording
             if self.axStatus == .granted, !self.hotkey.isRunning, self.hotkey.start(), !self.windows.onboardingVisible {
                 self.stopPermissionPolling()
+            }
+        }
+    }
+
+    /// The tap made at launch goes stale when Accessibility is switched off and on, or when macOS disables it.
+    /// This only reads status and never prompts; it rebuilds the tap after a re-grant or when it stops running.
+    private func watchHotkey() {
+        hotkeyWatch?.invalidate()
+        hotkeyWatch = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            let granted = Permissions.accessibility == .granted
+            defer { self.accessibilityWasGranted = granted }
+            guard granted, self.state != .listening else { return }
+            if !self.hotkey.isRunning {
+                if self.hotkey.start() { NSLog("Murmur: hotkey started after permission change") }
+            } else if !self.hotkey.isEnabled || !self.accessibilityWasGranted {
+                let wasEnabled = self.hotkey.isEnabled
+                self.hotkey.stop()
+                let started = self.hotkey.start()
+                NSLog("Murmur: hotkey tap rebuilt (wasEnabled=%d, wasGranted=%d), started=%d",
+                      wasEnabled ? 1 : 0, self.accessibilityWasGranted ? 1 : 0, started ? 1 : 0)
             }
         }
     }

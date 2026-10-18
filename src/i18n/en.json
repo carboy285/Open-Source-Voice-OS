@@ -60,7 +60,7 @@
   "report.polish_rejected.other": "Kept your wording",
   "report.undo": "Undo",
   "report.didnt_catch": "Didn't catch that",
-  "report.copied": "Couldn't type here, so the text is on your clipboard",
+  "report.copied": "Couldn't paste. Text is on your clipboard. Check Accessibility / Input Monitoring.",
   "report.secure_field": "Murmur doesn't type into password fields",
   "approval.title": "Check before Murmur acts",
   "approval.verb.Send": "Send",

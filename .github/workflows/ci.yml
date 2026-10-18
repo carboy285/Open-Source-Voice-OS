@@ -34,6 +34,9 @@ jobs:
       - name: Build the Swift package
         working-directory: native/macos
         run: swift build
+      - name: Test the Swift package
+        working-directory: native/macos
+        run: swift test
       - uses: actions/setup-node@v4
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         with:

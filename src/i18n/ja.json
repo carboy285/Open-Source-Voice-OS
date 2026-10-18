@@ -60,7 +60,7 @@
   "report.polish_rejected.other": "元の言い回しを残しました",
   "report.undo": "取り消す",
   "report.didnt_catch": "聞き取れませんでした",
-  "report.copied": "ここには入力できないため、クリップボードにコピーしました",
+  "report.copied": "貼り付けできませんでした。テキストはクリップボードにあります。アクセシビリティと入力監視を確認してください。",
   "report.secure_field": "パスワード欄には入力しません",
   "approval.title": "実行前に確認してください",
   "approval.verb.Send": "送信",

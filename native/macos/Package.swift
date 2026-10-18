@@ -18,5 +18,6 @@ let package = Package(
                 .linkedFramework("UserNotifications"),
             ]
         ),
+        .testTarget(name: "MurmurTests", dependencies: ["Murmur"], path: "Tests/MurmurTests"),
     ]
 )

@@ -66,7 +66,7 @@ export interface ChangeSummary {
 
 /** Everything OS-specific the core asks the shell for. */
 export interface ShellBridge {
-  insertText(text: string): Promise<{ ok: boolean; method: string }>;
+  insertText(text: string): Promise<{ ok: boolean; method: string; reason?: string }>;
   captureContext(): Promise<CapturedContext>;
   secrets: SecretStore;
   approvals: ApprovalUi;
@@ -401,8 +401,11 @@ export class MurmurCore {
       }
 
       this.emit({ type: "state", state: "inserting" });
-      const inserted = await this.options.bridge.insertText(result.text).catch(() => ({ ok: false, method: "none" }));
-      if (!inserted.ok) {
+      const inserted = await this.options.bridge
+        .insertText(result.text)
+        .catch((): { ok: boolean; method: string; reason?: string } => ({ ok: false, method: "none" }));
+      const notPlaced = !inserted.ok && inserted.reason !== "secure";
+      if (notPlaced) {
         this.emit({ type: "notify", title: this.t("app.name"), body: this.t("report.copied"), kind: "warning" });
       }
       const durationMs = audio
@@ -417,7 +420,9 @@ export class MurmurCore {
         summary,
         category: result.category,
       });
-      this.emit({ type: "state", state: "done" });
+      // A failed insert must be visible in the app itself, not only in a notification that may be switched off.
+      if (notPlaced) this.emit({ type: "state", state: "error", step: "inserting", message: this.t("report.copied") });
+      else this.emit({ type: "state", state: "done" });
       return { text: result.text, changes: result.changes, summary, category: result.category, inserted };
     } catch (error) {
       const step = error instanceof StepError ? error.step : "cleaning";
@@ -549,7 +554,7 @@ export interface DictationOutcome {
   changes: Change[];
   summary: ChangeSummary[];
   category: AppCategory;
-  inserted?: { ok: boolean; method: string };
+  inserted?: { ok: boolean; method: string; reason?: string };
   empty?: boolean;
   refused?: "secure";
 }

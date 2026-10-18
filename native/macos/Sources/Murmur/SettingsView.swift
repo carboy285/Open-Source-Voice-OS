@@ -167,6 +167,7 @@ struct AgentSettings: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var strings: Strings
     @State private var apiKey = ""
+    @FocusState private var keyFocused: Bool
 
     private var provider: String { model.settings["llm.provider"] as? String ?? "none" }
 
@@ -184,10 +185,9 @@ struct AgentSettings: View {
                 }
                 HStack {
                     SecureField(L("settings.llm.api_key"), text: $apiKey)
-                    Button(L("approval.save")) {
-                        model.saveApiKey(apiKey)
-                        apiKey = ""
-                    }
+                        .focused($keyFocused)
+                        .onSubmit(commitKey)
+                    Button(L("approval.save"), action: commitKey)
                 }
                 if let error = model.apiKeyError {
                     Text(error).font(.caption).foregroundStyle(.red)
@@ -200,6 +200,18 @@ struct AgentSettings: View {
             }
         }
         .formStyle(.grouped)
+        .onChange(of: keyFocused) { focused in
+            if !focused { commitKey() }
+        }
+        .onDisappear(perform: commitKey)
+    }
+
+    /// Saves a typed key on Return, when the field loses focus, or when the tab closes, not only on the button.
+    private func commitKey() {
+        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        model.saveApiKey(key)
+        apiKey = ""
     }
 }
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { databasePath, mcpConfigPath } from "../core/paths.js";
+import { VERSION } from "../core/version.js";
 
 // node:sqlite prints an experimental warning on import; keep stderr clean for the shells.
 const emitWarning = process.emitWarning.bind(process);
@@ -7,8 +8,6 @@ process.emitWarning = ((warning: string | Error, ...rest: unknown[]) => {
   if (String(warning instanceof Error ? warning.message : warning).includes("SQLite")) return;
   (emitWarning as (...args: unknown[]) => void)(warning, ...rest);
 }) as typeof process.emitWarning;
-
-const VERSION = "0.1.0";
 
 const HELP = `Murmur ${VERSION}: voice dictation and a voice agent for your computer.
 

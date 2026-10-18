@@ -28,6 +28,8 @@ final class HotkeyMonitor {
     var toggleMode = false
 
     var isRunning: Bool { tap != nil }
+    /// False when macOS switched the tap off, e.g. after the Accessibility grant changed.
+    var isEnabled: Bool { tap.map { CGEvent.tapIsEnabled(tap: $0) } ?? false }
 
     /// Needs Input Monitoring (listen-only taps). Returns false when the system refuses the tap.
     @discardableResult

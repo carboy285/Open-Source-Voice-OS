@@ -37,13 +37,14 @@ The speech model is downloaded from inside the app (step 3.0). Homebrew isn't ne
 
 ## 2. Onboarding and permissions
 
-| #   | Do                                                     | Expect                                                                  |
-| --- | ------------------------------------------------------ | ----------------------------------------------------------------------- |
-| 2.1 | First launch                                           | The onboarding window opens, in Japanese if your Mac is set to Japanese |
-| 2.2 | Grant Microphone                                       | The system prompt appears; the row turns to granted without restarting  |
-| 2.3 | Grant Accessibility (the button opens System Settings) | After you switch Murmur on, the row updates within a few seconds        |
-| 2.4 | Skip Screen Recording                                  | The app keeps working; agent screenshots are simply not used            |
-| 2.5 | Close onboarding, then reopen it from the menu         | The permission status is still correct                                  |
+| #   | Do                                                                      | Expect                                                                                                    |
+| --- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| 2.1 | First launch                                                            | The onboarding window opens, in Japanese if your Mac is set to Japanese                                   |
+| 2.2 | Grant Microphone                                                        | The system prompt appears; the row turns to granted without restarting                                    |
+| 2.3 | Grant Accessibility (the button opens System Settings)                  | After you switch Murmur on, the row updates within a few seconds                                          |
+| 2.4 | Skip Screen Recording                                                   | The app keeps working; agent screenshots are simply not used                                              |
+| 2.5 | Close onboarding, then reopen it from the menu                          | The permission status is still correct                                                                    |
+| 2.6 | With Murmur running, switch Accessibility off and on in System Settings | Within a few seconds the hotkey works again without restarting Murmur (the log says "hotkey tap rebuilt") |
 
 ## 3. Dictation
 
@@ -51,19 +52,26 @@ The speech model is downloaded from inside the app (step 3.0). Homebrew isn't ne
 
 To use whisper.cpp instead (for Japanese), switch the engine in Settings › Dictation and choose `whisper-cli` and a `ggml-*.bin` model; `whisper-cli` ships inside the app, and the picker also accepts a Homebrew one.
 
-| #    | Do                                                                                    | Expect                                                                                      |
-| ---- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 3.1  | Click into TextEdit. Hold Right Option, say "um so the meeting is uh at noon", let go | "So the meeting is at noon." appears at the cursor                                          |
-| 3.2  | Watch the screen while you press                                                      | The listening surface grows out of the notch the instant you press the key                  |
-| 3.3  | Check the change card after inserting                                                 | It lists the removed fillers and disappears after a few seconds                             |
-| 3.4  | Tap Right Option very briefly                                                         | Nothing is inserted (a press under 300 ms counts as accidental)                             |
-| 3.5  | Hold, start speaking, press Esc                                                       | Listening is cancelled and nothing is inserted                                              |
-| 3.6  | Say "first buy milk second call Ana third book flights" in Notes                      | A three-item list                                                                           |
-| 3.7  | Dictate into Slack or Messages, then into Mail                                        | Chat output is casual with no trailing period; Mail gets full sentences                     |
-| 3.8  | Dictate into a password field                                                         | Murmur refuses to insert                                                                    |
-| 3.9  | Dictate into a browser text box and into VS Code                                      | Text arrives (by paste if direct insertion fails), and the clipboard is restored afterwards |
-| 3.10 | Speak Japanese                                                                        | Japanese text with 。, no added spaces                                                      |
-| 3.11 | Select text, hold Right Option + Command, say "make this more formal"                 | The selection is rewritten (needs a model in Settings › Agent)                              |
+| #    | Do                                                                                                                  | Expect                                                                                                                                                                             |
+| ---- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1  | Click into TextEdit. Hold Right Option, say "um so the meeting is uh at noon", let go                               | "So the meeting is at noon." appears at the cursor                                                                                                                                 |
+| 3.2  | Watch the screen while you press                                                                                    | The listening surface grows out of the notch the instant you press the key                                                                                                         |
+| 3.3  | Check the change card after inserting                                                                               | It lists the removed fillers and disappears after a few seconds                                                                                                                    |
+| 3.4  | Tap Right Option very briefly                                                                                       | Nothing is inserted (a press under 300 ms counts as accidental)                                                                                                                    |
+| 3.5  | Hold, start speaking, press Esc                                                                                     | Listening is cancelled and nothing is inserted                                                                                                                                     |
+| 3.6  | Say "first buy milk second call Ana third book flights" in Notes                                                    | A three-item list                                                                                                                                                                  |
+| 3.7  | Dictate into Slack or Messages, then into Mail                                                                      | Chat output is casual with no trailing period; Mail gets full sentences                                                                                                            |
+| 3.8  | Dictate into a password field                                                                                       | Murmur refuses to insert                                                                                                                                                           |
+| 3.9  | Dictate into a browser text box and into VS Code                                                                    | Text arrives (by paste if direct insertion fails), and the clipboard is restored afterwards                                                                                        |
+| 3.10 | Speak Japanese                                                                                                      | Japanese text with 。, no added spaces                                                                                                                                             |
+| 3.11 | Select text, hold Right Option + Command, say "make this more formal"                                               | The selection is rewritten (needs a model in Settings › Agent)                                                                                                                     |
+| 3.12 | Fresh install: grant Accessibility and Input Monitoring, click into a blank TextEdit document, dictate              | The text appears at the cursor, and your previous clipboard comes back                                                                                                             |
+| 3.13 | Switch Accessibility off and on (or install a new build over the old one), then dictate into TextEdit again         | The text appears, or the notch says "Couldn't paste. Text is on your clipboard. Check Accessibility / Input Monitoring." and Cmd+V pastes the dictation. It must never stay silent |
+| 3.14 | After 3.12 or 3.13, run `log show --last 2m --predicate 'subsystem == "app.murmur" && category == "insert"' --info` | One `insert app=… role=… trusted=… post=… listen=…` line, the routes tried with their result codes, and the outcome. No dictated text appears                                      |
+
+If 3.13 fails with `post=false` or `trusted=false`: an ad-hoc signed build gets a new code identity on every update, so the old Accessibility entry no longer matches. Reset it with `tccutil reset Accessibility app.murmur`, `tccutil reset ListenEvent app.murmur` and `tccutil reset PostEvent app.murmur`, reopen Murmur and grant again. Send the log lines from 3.14 with your report.
+
+An app that exposes no text to read (some Electron apps) can't be checked. Murmur then trusts the paste and leaves the dictated text on the clipboard.
 
 ## 4. Agent and the approval gate
 
