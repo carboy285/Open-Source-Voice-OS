@@ -31,9 +31,7 @@ export async function runAgent(
     ctx?.appName ? `Frontmost app: ${ctx.appName}` : "",
     ctx?.screenText ? `Text on screen:\n${ctx.screenText}` : "",
   ].filter(Boolean);
-  const messages: Message[] = [
-    { role: "user", text: [...contextLines, `Request: ${request}`].join("\n\n") },
-  ];
+  const messages: Message[] = [{ role: "user", text: [...contextLines, `Request: ${request}`].join("\n\n") }];
 
   for (let step = 1; step <= maxSteps; step++) {
     const response = await llm.complete({ system: AGENT_SYSTEM, messages, tools: specs, maxTokens: 1024 });

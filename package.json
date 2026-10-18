@@ -1,19 +1,36 @@
 {
-  "name": "open-source-voice-os",
+  "name": "murmur",
   "version": "0.1.0",
-  "description": "Open-source voice layer for your computer: dictation, voice edit and an MCP-powered agent mode.",
+  "description": "Open-source voice layer for macOS and Windows: dictation, a voice agent with an approval gate, connectors and MCP.",
+  "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "murmur": "dist/cli/main.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "dev": "tsx src/cli/main.ts"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/carboy285/open-source-voice-os.git"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/carboy285/open-source-voice-os/issues"
   },
@@ -24,16 +41,15 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.2",
     "vitest": "^5.0.5"
-  },
-  "type": "module",
-  "bin": {
-    "voiceos": "dist/cli/main.js"
-  },
-  "engines": {
-    "node": ">=22"
   }
 }

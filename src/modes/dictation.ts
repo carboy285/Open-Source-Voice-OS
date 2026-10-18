@@ -25,7 +25,11 @@ export function cleanTranscript(raw: string, options: CleanupOptions = {}): stri
   }
   // "the the cat" -> "the cat"
   text = text.replace(/\b(\w+)(?:\s+\1\b)+/gi, "$1");
-  text = text.replace(/[ \t]+/g, " ").replace(/ +([,.!?;:])/g, "$1").replace(/ *\n */g, "\n").trim();
+  text = text
+    .replace(/[ \t]+/g, " ")
+    .replace(/ +([,.!?;:])/g, "$1")
+    .replace(/ *\n */g, "\n")
+    .trim();
   if (!text) return "";
   text = text.replace(/(^|[.!?]\s+|\n)([a-z])/g, (_, lead: string, ch: string) => lead + ch.toUpperCase());
   if (!/[.!?]$/.test(text) && !text.includes("\n")) text += ".";
@@ -48,7 +52,9 @@ export async function dictate(
   let text = cleanTranscript(transcript, options);
   if (!text) return "";
   if (options.polish) {
-    const where = context.appName ? `The text goes into ${context.appName}${context.kind ? ` (${context.kind})` : ""}.` : "";
+    const where = context.appName
+      ? `The text goes into ${context.appName}${context.kind ? ` (${context.kind})` : ""}.`
+      : "";
     const response = await options.polish.complete({
       system: POLISH_SYSTEM,
       messages: [{ role: "user", text: `${where}\n\nDictation:\n${text}`.trim() }],
