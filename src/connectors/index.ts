@@ -2,6 +2,8 @@ import type { ReminderStore } from "../reminders/scheduler.js";
 import { filesConnector } from "./files.js";
 import { obsidianConnector } from "./obsidian.js";
 import { remindersConnector } from "./reminders.js";
+import type { AgentHub } from "../agents/hub.js";
+import { agentsConnector } from "./agents.js";
 import { appleConnectors, type NativeCall } from "./apple.js";
 import { calendarConnector } from "./skeletons/calendar.js";
 import { driveConnector } from "./skeletons/drive.js";
@@ -14,7 +16,12 @@ import { webConnector } from "./web.js";
 import { writingConnector, type InsertText } from "./writing.js";
 
 /** Every built-in connector, in catalog order. */
-export function builtinConnectors(reminders: ReminderStore, native?: NativeCall, insert?: InsertText): Connector[] {
+export function builtinConnectors(
+  reminders: ReminderStore,
+  native?: NativeCall,
+  insert?: InsertText,
+  agents?: AgentHub,
+): Connector[] {
   return [
     webConnector(),
     filesConnector(),
@@ -28,5 +35,6 @@ export function builtinConnectors(reminders: ReminderStore, native?: NativeCall,
     linearConnector(),
     driveConnector(),
     ...(native ? appleConnectors(native) : []),
+    ...(agents ? [agentsConnector(agents)] : []),
   ];
 }

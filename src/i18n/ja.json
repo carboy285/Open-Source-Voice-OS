@@ -306,5 +306,10 @@
   "settings.circle.help": "範囲内の文字は Mac 上で読み取り、画像はあなたの AI プロバイダーにだけ送られます。何も保存されません。",
   "settings.circle.permission": "画面収録の許可が必要です。",
   "settings.circle.allow": "許可…",
-  "settings.llm.vision": "このモデルは画像を見られる"
+  "settings.llm.vision": "このモデルは画像を見られる",
+  "card.kind.agent": "コーディングエージェント",
+  "settings.agents.title": "コーディングエージェント",
+  "settings.agents.missing": "この Mac に見つかりません。",
+  "settings.agents.stop": "停止",
+  "settings.agents.help": "Murmur はこれらのエージェントを起動し、質問をノッチに表示できます。あなたが許可しない限り何も実行されません。「Codex に…を頼んで」と話すと起動します。"
 }

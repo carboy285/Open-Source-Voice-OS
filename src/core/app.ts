@@ -1,4 +1,9 @@
 import { rmSync } from "node:fs";
+import { AgentHub } from "../agents/hub.js";
+import { ClaudeAdapter } from "../agents/claude.js";
+import { CodexAdapter } from "../agents/codex.js";
+import { OpenCodeAdapter } from "../agents/opencode.js";
+import type { AgentAdapter, AgentSession } from "../agents/types.js";
 import { ComposioHost, ComposioService, type ComposioEvent } from "../composio/service.js";
 import { COMPOSIO_KEY } from "../composio/client.js";
 import { builtinConnectors } from "../connectors/index.js";
@@ -64,7 +69,8 @@ export type CoreEvent =
   | { type: "models.progress"; id: string; received: number; total?: number }
   | { type: "models.done"; id: string; ok: boolean; error?: string }
   | { type: "chatgpt.login"; state: "waiting" | "done" | "failed"; error?: string }
-  | ComposioEvent;
+  | ComposioEvent
+  | { type: "agents.update"; session: AgentSession };
 
 export interface ChangeSummary {
   category: ChangeCategory;
@@ -98,6 +104,7 @@ export interface CoreOptions {
   env?: NodeJS.ProcessEnv;
   clock?: Clock;
   /** Overrides for tests. */
+  agentAdapters?: AgentAdapter[];
   stt?: SttProvider;
   llm?: LlmProvider;
   mcpFactory?: ConnectionFactory;
@@ -112,6 +119,7 @@ export class MurmurCore {
   history!: DictationHistoryRepo;
   chatgpt!: ChatGptSession;
   composio!: ComposioService;
+  agents!: AgentHub;
   tasks!: TaskRepo;
   reminders!: ReminderRepo;
   learner!: CorrectionLearner;
@@ -172,8 +180,25 @@ export class MurmurCore {
       },
       settingsFor: (id) => this.settings.get("connectors.settings")[id] ?? {},
     };
+    this.agents = new AgentHub({
+      adapters: this.options.agentAdapters ?? [new CodexAdapter(), new ClaudeAdapter(), new OpenCodeAdapter()],
+      approvals: this.options.bridge.approvals,
+      emit: (event) => this.emit(event),
+      isEnabled: (kind) => this.settings.get("agents.enabled").includes(kind),
+      clock: this.clock,
+      timeoutMs: () => this.settings.get("approval.timeoutMs"),
+      recentFolders: {
+        get: () => this.settings.get("agents.recentFolders"),
+        set: (folders) => this.settings.set("agents.recentFolders", folders),
+      },
+    });
     this.registry = new ConnectorRegistry(state, (id) => this.connectorContext(id)).register(
-      ...builtinConnectors(this.reminders, this.options.bridge.native, (text) => this.options.bridge.insertText(text)),
+      ...builtinConnectors(
+        this.reminders,
+        this.options.bridge.native,
+        (text) => this.options.bridge.insertText(text),
+        this.agents,
+      ),
     );
     this.composio = new ComposioService({
       secrets: this.secrets,
@@ -615,6 +640,7 @@ export class MurmurCore {
   }
 
   async close(): Promise<void> {
+    await this.agents.close();
     this.scheduler.stop();
     await this.mcp.close();
     this.db.close();

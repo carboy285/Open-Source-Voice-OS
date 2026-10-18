@@ -190,6 +190,50 @@ func symbol(forIcon icon: String) -> String {
     case "issue": return "checklist"
     case "cloud": return "icloud"
     case "mcp": return "puzzlepiece.extension"
+    case "agent": return "terminal"
     default: return "wrench.and.screwdriver"
     }
+}
+
+/// A coding agent Murmur found on this Mac (Codex, Claude Code, OpenCode).
+struct CodingAgentInfo: Identifiable {
+    let id: String
+    let label: String
+    let installed: Bool
+    let enabled: Bool
+    let version: String
+    let hint: String
+
+    init(_ json: JSONObject) {
+        id = json["kind"] as? String ?? ""
+        label = json["label"] as? String ?? id
+        installed = json["installed"] as? Bool ?? false
+        enabled = json["enabled"] as? Bool ?? false
+        version = json["version"] as? String ?? ""
+        hint = json["hint"] as? String ?? ""
+    }
+}
+
+/// One run of a coding agent that Murmur started.
+struct CodingAgentSession: Identifiable {
+    let id: String
+    let label: String
+    let cwd: String
+    let task: String
+    let status: String
+    let text: String
+    let startedAt: Double
+
+    init?(_ json: JSONObject) {
+        guard let id = json["id"] as? String else { return nil }
+        self.id = id
+        label = json["label"] as? String ?? ""
+        cwd = json["cwd"] as? String ?? ""
+        task = json["task"] as? String ?? ""
+        status = json["status"] as? String ?? ""
+        text = json["text"] as? String ?? ""
+        startedAt = json["startedAt"] as? Double ?? 0
+    }
+
+    var isActive: Bool { ["starting", "working", "needs_you", "idle"].contains(status) }
 }

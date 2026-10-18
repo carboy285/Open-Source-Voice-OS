@@ -293,6 +293,41 @@ struct ConnectorSettings: View {
                     }
                 }
             }
+            Section(L("settings.agents.title")) {
+                ForEach(model.codingAgents) { agent in
+                    HStack(alignment: .top, spacing: Space.m) {
+                        Image(systemName: "terminal").frame(width: 24).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(agent.label).font(.body.weight(.medium))
+                            if !agent.installed {
+                                Text(L("settings.agents.missing")).font(.caption).foregroundStyle(.secondary)
+                            } else if !agent.hint.isEmpty {
+                                Text(agent.hint).font(.caption).foregroundStyle(.orange)
+                            } else if !agent.version.isEmpty {
+                                Text(agent.version).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        Toggle(L("settings.connectors.on"), isOn: Binding(get: { agent.enabled }, set: { model.setAgentEnabled(agent.id, $0) }))
+                            .labelsHidden()
+                            .disabled(!agent.installed)
+                            .accessibilityLabel(agent.label)
+                    }
+                }
+                ForEach(model.agentSessions.prefix(5)) { session in
+                    HStack(alignment: .top, spacing: Space.m) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(session.label): \(session.task)").font(.callout).lineLimit(1)
+                            Text(session.text).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                        Spacer()
+                        if session.isActive {
+                            Button(L("settings.agents.stop")) { model.stopAgent(session.id) }
+                        }
+                    }
+                }
+                Text(L("settings.agents.help")).font(.caption).foregroundStyle(.secondary)
+            }
             Section(L("settings.connectors.mcp")) {
                 ForEach(model.mcpServers) { server in
                     HStack {
@@ -311,6 +346,7 @@ struct ConnectorSettings: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear { model.refreshAgents() }
     }
 
     private func folderButton(_ id: String, key: String) -> some View {

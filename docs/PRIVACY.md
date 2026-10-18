@@ -71,3 +71,7 @@ The agent remembers the conversation so a follow-up like "move it to 4" makes se
 ## Circle to Ask and pictures of your window
 
 When you circle something (or switch on "Include a picture of my window"), Murmur takes a picture of that area or window with macOS Screen Recording, which you allow in System Settings. The words in it are read on your Mac. The picture and those words go to your own AI provider with your question, and nowhere else. Pictures are held in memory for that one request: they are not saved, and the chat memory keeps only a note that a picture was attached. A model that cannot see images gets the words alone. Murmur never watches the screen in the background; it looks only when you circle, or when you have asked it to include your window.
+
+## Coding agents
+
+If you switch on Codex, Claude Code or OpenCode in Settings, Murmur can start them in a folder you name and show their questions in the notch. Murmur runs the agent program already installed on your Mac and talks to it on your computer only. Your task and the agent's messages go to Murmur's own screen; whatever the agent itself sends to its provider is between you and that provider, as when you run it yourself. Murmur never reads the agent's sign-in or keys. Nothing is allowed by default: no answer, a timeout or closing a card is a "no", and a risky command needs a second yes. Murmur never starts agents that act for you in the outside world (such as Cue).

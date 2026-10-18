@@ -33,6 +33,9 @@ export const DEFAULT_SETTINGS = {
   "tts.voice": "",
   /** 0 to 1; the shell maps it to its own speech rate. */
   "tts.rate": 0.5,
+  /** Which coding agents Murmur may start (Settings › Agent). */
+  "agents.enabled": ["codex", "claude", "opencode"] as string[],
+  "agents.recentFolders": [] as string[],
   "composio.userId": "",
   "composio.apps": {} as Record<string, { enabled: boolean; readOnly: boolean }>,
   "llm.provider": "none" as "none" | "anthropic" | "openai-compatible" | "chatgpt",

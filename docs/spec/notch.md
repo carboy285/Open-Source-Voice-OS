@@ -45,6 +45,10 @@ Hold the dictation key with Control (Right Option + Control by default) and a fa
 
 "Include a picture of my window" on the typing card (or Settings › Include a picture of my window with every Ask) adds the biggest window of the app you were in to an Ask, even when something covers it.
 
+## Coding agents
+
+When Codex, Claude Code or OpenCode (started from Murmur) stops to ask, the question is an approval card of kind "agent": the agent's name, what it wants (the exact command, file change or question) and the folder. Commands and file changes are allowed or refused exactly as shown and cannot be edited; a question has a text box for the answer. A risky command (deleting files, `sudo`, force-push and the like) asks twice, with a separate confirm step. No answer, a timeout or closing the card is "no". When an agent finishes or fails, a notification says so. Settings › Connectors lists detected agents, their switches, recent runs and a Stop button. Cue and other agents that act for the user in the outside world are not controlled.
+
 ## Spoken replies
 
 Agent replies are read aloud with the Mac's own voices when Read replies aloud is on (Settings › Agent): the chosen voice, or the best installed voice for the reply's language, at the chosen speed. Speech stops when the dictation key is pressed, when the typing box opens, when a new request is sent, or from the speaker button on the reply card. Nothing is sent anywhere for speech.

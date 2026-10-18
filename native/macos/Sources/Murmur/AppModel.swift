@@ -74,6 +74,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     @Published var settings: JSONObject = [:]
     @Published var connectors: [ConnectorInfo] = []
     @Published var mcpServers: [McpServerInfo] = []
+    @Published var codingAgents: [CodingAgentInfo] = []
+    @Published var agentSessions: [CodingAgentSession] = []
     @Published var llmReady = false
     @Published var sttReady = false
     @Published var panelVisible = false
@@ -681,6 +683,13 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             } else {
                 approvals.append(preview)
             }
+        case "agents.update":
+            guard let json = params["session"] as? JSONObject, let session = CodingAgentSession(json) else { return }
+            if let index = agentSessions.firstIndex(where: { $0.id == session.id }) {
+                agentSessions[index] = session
+            } else {
+                agentSessions.insert(session, at: 0)
+            }
         case "approval.dismiss":
             approvals.removeAll { $0.callId == params["callId"] as? String }
         case "notify":
@@ -789,6 +798,30 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                 L.load(strings, locale: object["locale"] as? String ?? "en")
             }
         }
+    }
+
+    /// Looks for coding agents on this Mac and reads the runs Murmur has started.
+    func refreshAgents() {
+        core.request("agents.detect") { [weak self] result in
+            guard case let .success(value) = result, let list = (value as? JSONObject)?["agents"] as? [JSONObject] else { return }
+            self?.codingAgents = list.map(CodingAgentInfo.init)
+        }
+        core.request("agents.list") { [weak self] result in
+            guard case let .success(value) = result, let list = (value as? JSONObject)?["sessions"] as? [JSONObject] else { return }
+            self?.agentSessions = list.compactMap(CodingAgentSession.init)
+        }
+    }
+
+    func stopAgent(_ id: String) {
+        core.request("agents.stop", ["id": id])
+    }
+
+    /// Switches one coding agent on or off. The list is kept in the core's settings.
+    func setAgentEnabled(_ kind: String, _ on: Bool) {
+        var enabled = (settings["agents.enabled"] as? [String]) ?? ["codex", "claude", "opencode"]
+        enabled.removeAll { $0 == kind }
+        if on { enabled.append(kind) }
+        setSetting("agents.enabled", enabled, then: { [weak self] _ in self?.refreshAgents() })
     }
 
     func refreshConnectors() {

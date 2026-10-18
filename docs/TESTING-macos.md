@@ -150,6 +150,16 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 7. Say "Draft an email to <someone> saying I'll be late." An approval appears; after approving, a draft window opens in Mail. Nothing is sent.
 8. Deny a permission in System Settings › Privacy & Security, ask again: the reply tells you where to allow it.
 
+### 4.7 Coding agents (Codex, Claude Code, OpenCode)
+
+1. Settings › Connectors › Coding agents: each agent you have installed shows with a switch. One that needs a sign-in says so. Grok Build and Cue are not listed.
+2. Hold the agent key and say "Ask Codex to list the files in <a test folder>." An approval appears first for starting the agent (it names the folder). Approve.
+3. A card named "Coding agent" appears in the notch when Codex wants to run a command or change a file. It shows the exact command and folder. Allow it: Codex continues. Run it again and say No: Codex is told no and carries on without it.
+4. Leave a card unanswered until it times out: it closes and counts as No.
+5. Ask for something risky ("delete the build folder with rm -rf"). The card asks twice; the second step is a separate confirm.
+6. Settings › Connectors › Coding agents: the run shows its latest message and a Stop button; Stop ends it. A notification arrives when an agent finishes.
+7. Repeat steps 2 to 3 with OpenCode and Claude Code (Claude Code needs `claude auth login` first).
+
 ## 5. MCP
 
 ```sh

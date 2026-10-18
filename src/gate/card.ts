@@ -6,7 +6,7 @@ import { addDays, wallTime } from "../reminders/time.js";
  * input it was given, so the shell only draws it: an event looks like an event, an email like an email. Nothing
  * here comes from the model's own words except the values it filled in, and a shell shows those as plain text.
  */
-export type CardKind = "event" | "email" | "reminder" | "message" | "file" | "generic";
+export type CardKind = "event" | "email" | "reminder" | "message" | "file" | "agent" | "generic";
 
 export interface CardRow {
   /** Icon id the shell maps to its own symbol: clock, person, pin, text, link, folder, list. */

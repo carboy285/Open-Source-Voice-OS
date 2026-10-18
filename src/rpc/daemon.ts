@@ -144,6 +144,12 @@ export function registerMethods(peer: JsonRpcPeer, core: MurmurCore, approvals: 
         context: p.context && typeof p.context === "object" ? (p.context as CapturedContext) : undefined,
       }),
     )
+    .handle("agents.list", () => ({ sessions: core.agents.list() }))
+    .handle("agents.detect", async () => ({ agents: await core.agents.detect() }))
+    .handle("agents.stop", async (p) => {
+      await core.agents.stop(str(p.id, "id"));
+      return { ok: true };
+    })
     .handle("conversation.reset", () => {
       core.conversation.reset();
       return { ok: true };

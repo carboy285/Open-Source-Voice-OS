@@ -306,5 +306,10 @@
   "settings.circle.help": "Murmur reads the words in the area on your Mac and sends the picture only to your own AI provider. Nothing is kept.",
   "settings.circle.permission": "Needs Screen Recording.",
   "settings.circle.allow": "Allow…",
-  "settings.llm.vision": "My model can see images"
+  "settings.llm.vision": "My model can see images",
+  "card.kind.agent": "Coding agent",
+  "settings.agents.title": "Coding agents",
+  "settings.agents.missing": "Not found on this Mac.",
+  "settings.agents.stop": "Stop",
+  "settings.agents.help": "Murmur can start these agents and show their questions in the notch. Nothing is allowed unless you say yes. Say “ask Codex to…” to start one."
 }
