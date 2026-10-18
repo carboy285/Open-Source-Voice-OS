@@ -198,6 +198,11 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     }
 
     private func hotkeyUp() {
+        // Whatever moved the state away, an open microphone means the hold is still being recorded.
+        if audio.isRecording, state != .listening, state != .transcribing {
+            NSLog("Murmur: state was %@ while recording; restoring", state.rawValue)
+            state = .listening
+        }
         guard state == .listening else { return }
         Cue.play(start: false, enabled: soundOn)
         if Date().timeIntervalSince(pressStarted) < 0.3 {
@@ -307,7 +312,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             speech.handle(method, params)
         case "state":
             guard let raw = params["state"] as? String, let next = ShellState(rawValue: raw) else { return }
-            if next == .listening { return }
+            // Late events from the previous dictation must not hide the listening notch while the mic is open.
+            if next == .listening || state == .listening || audio.isRecording { return }
             if action == .agent, next == .done { return }
             state = next
             if next == .done, let message = params["message"] as? String {
@@ -557,12 +563,38 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
     }
 
+    private var stuckTicks = 0
+
+    /// Two failure modes leave the microphone on with nothing on screen: the state moved away from
+    /// listening while recording, or the key release was never seen (the event tap was switched off for a moment).
+    /// Both are caught here after two seconds in a row, so the mic can't stay open.
+    private func checkMicrophoneIsNotStuck() {
+        let problem = MicGuard.problem(
+            recording: audio.isRecording, state: state, toggleMode: hotkey.toggleMode,
+            tapRunning: hotkey.isRunning, keyHeld: hotkey.isPhysicallyHeld)
+        guard let problem else { stuckTicks = 0; return }
+        let lostRelease = problem == .releaseLost
+        stuckTicks += 1
+        guard stuckTicks >= 2 else { return }
+        stuckTicks = 0
+        NSLog("Murmur: microphone was open with state %@; releasing (lostRelease=%d)", state.rawValue, lostRelease ? 1 : 0)
+        hotkey.forceRelease()
+        if lostRelease {
+            hotkeyUp()
+        } else {
+            _ = audio.stop()
+            core.request("dictation.cancel")
+            state = .idle
+        }
+    }
+
     /// The tap made at launch goes stale when Accessibility is switched off and on, or when macOS disables it.
     /// This only reads status and never prompts; it rebuilds the tap after a re-grant or when it stops running.
     private func watchHotkey() {
         hotkeyWatch?.invalidate()
-        hotkeyWatch = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+        hotkeyWatch = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self else { return }
+            self.checkMicrophoneIsNotStuck()
             let granted = Permissions.accessibility == .granted
             defer { self.accessibilityWasGranted = granted }
             guard granted, self.state != .listening else { return }

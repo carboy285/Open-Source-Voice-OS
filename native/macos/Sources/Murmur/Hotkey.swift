@@ -28,6 +28,14 @@ final class HotkeyMonitor {
     var toggleMode = false
 
     var isRunning: Bool { tap != nil }
+
+    /// Whether the hotkey's modifier is physically down right now, read from the system, not from tap events.
+    var isPhysicallyHeld: Bool {
+        CGEventSource.flagsState(.combinedSessionState).contains(modifierFlag(for: keyCode))
+    }
+
+    /// Forgets a hold whose release was never seen.
+    func forceRelease() { isDown = false }
     /// False when macOS switched the tap off, e.g. after the Accessibility grant changed.
     var isEnabled: Bool { tap.map { CGEvent.tapIsEnabled(tap: $0) } ?? false }
 
