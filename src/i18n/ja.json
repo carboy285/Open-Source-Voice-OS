@@ -253,5 +253,10 @@
   "settings.apps.failed": "接続できませんでした: {error}",
   "settings.apps.empty": "アプリが見つかりません。",
   "settings.apps.privacy": "エージェントがこれらのアプリから読む内容は Composio のサーバーを通ります。送信や変更を伴う操作は、これまで通り先にプレビューが表示されます。",
-  "settings.apps.need_key": "アプリを接続するには Composio のキーを追加してください。"
+  "settings.apps.need_key": "アプリを接続するには Composio のキーを追加してください。",
+  "card.kind.event": "新しい予定",
+  "card.kind.email": "新しいメール",
+  "card.kind.reminder": "新しいリマインダー",
+  "card.kind.message": "新しいメッセージ",
+  "card.kind.file": "ファイルの変更"
 }

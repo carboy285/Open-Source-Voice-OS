@@ -20,13 +20,17 @@ struct ApprovalView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.l) {
-            header
-            Text(preview.summary)
-                .font(.title3.weight(.semibold))
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
+            if let card = preview.card, !editing {
+                PreviewCardView(card: card, destructive: preview.destructive)
+            } else {
+                header
+                Text(preview.summary)
+                    .font(.title3.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+            }
             if !preview.errors.isEmpty { errors }
-            fields
+            if preview.card == nil || editing { fields }
             DisclosureGroup(L("approval.details"), isExpanded: $showDetails) {
                 ScrollView {
                     Text(rawJSON)
@@ -125,6 +129,11 @@ struct ApprovalView: View {
                     .buttonStyle(PressableButtonStyle())
                     .keyboardShortcut(.cancelAction)
             } else {
+                if let text = preview.card?.badgeText {
+                    Label(text, systemImage: PreviewCard.symbol(preview.card?.badgeIcon ?? "video"))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
                 Button(L("approval.edit")) { editing = true }
                     .buttonStyle(PressableButtonStyle())
                     .disabled(preview.fields.isEmpty)

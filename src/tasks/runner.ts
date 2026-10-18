@@ -24,6 +24,8 @@ export interface TaskRunnerOptions {
   saveTranscripts?: () => boolean;
   /** IANA zone of the user; the agent is told the date and time in it. */
   timeZone?: () => string;
+  /** BCP 47 locale for dates on approval cards. */
+  locale?: () => string;
   limits?: () => { maxSteps?: number; maxWallMs?: number; approvalTimeoutMs?: number };
   onUpdate?: (update: TaskUpdate) => void;
   /** Called when a long task ends, so the shell can post a system notification. */
@@ -116,6 +118,8 @@ export class TaskRunner {
     const gate = new ApprovalGate(this.options.approvals, {
       timeoutMs: limits.approvalTimeoutMs,
       clock: this.clock,
+      timeZone: this.options.timeZone?.(),
+      locale: this.options.locale?.(),
       onState: (_callId, state) => {
         if (entry.controller.signal.aborted) return;
         if (state === "pending" || state === "edited") this.setStatus(entry, "waiting_approval");

@@ -31,6 +31,9 @@ export interface GateOptions {
   /** No response within this time is treated as Cancel. Default 10 minutes. */
   timeoutMs?: number;
   clock?: Clock;
+  /** IANA zone and locale of the user, for the times on a preview card. */
+  timeZone?: string;
+  locale?: string;
   /** Called on every state change, e.g. to mark a task as waiting_approval. */
   onState?: (callId: string, state: Preview["state"] | FinalDecision) => void;
 }
@@ -85,6 +88,11 @@ export class ApprovalGate {
         stage,
         errors,
         expiresAt: this.clock.now() + this.timeoutMs,
+        card: {
+          now: this.clock.now(),
+          timeZone: this.options.timeZone ?? "UTC",
+          locale: this.options.locale ?? "en-US",
+        },
       });
       const response = await this.ask(preview, signal);
       if (response === "expired") return this.finish(call.id, "expired", shown);

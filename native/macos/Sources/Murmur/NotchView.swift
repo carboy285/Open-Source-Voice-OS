@@ -100,9 +100,9 @@ struct NotchSurfaceView: View {
         let size = controller.shapeSize(for: surface)
         let radius = controller.cornerRadius(for: surface)
         let hidden = surface == .hidden
+        let isApproval: Bool = { if case .approval = surface { return true } else { return false } }()
         ZStack(alignment: .top) {
-            NotchShape(bottomRadius: radius)
-                .fill(Color.black)
+            NotchBackground(notchHeight: controller.geometry.notchSize.height, height: size.height, glow: isApproval)
             content
         }
         .frame(width: size.width, height: size.height, alignment: .top)

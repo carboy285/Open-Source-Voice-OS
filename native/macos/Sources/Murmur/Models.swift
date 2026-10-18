@@ -17,6 +17,61 @@ struct PreviewField: Identifiable {
     }
 }
 
+/// One line of a preview card: an icon and a text, some pills, or a short paragraph.
+struct CardRowInfo: Identifiable {
+    let id = UUID()
+    let icon: String
+    let style: String
+    let label: String?
+    let values: [String]
+}
+
+/// How the core wants a preview drawn: an event, an email, a reminder... The shell only draws it.
+struct PreviewCard {
+    let kind: String
+    let icon: String
+    let app: String
+    let title: String
+    let rows: [CardRowInfo]
+    let badgeIcon: String?
+    let badgeText: String?
+
+    init?(_ json: JSONObject?) {
+        guard let json, let title = json["title"] as? String else { return nil }
+        kind = json["kind"] as? String ?? "generic"
+        icon = json["icon"] as? String ?? "tool"
+        app = json["app"] as? String ?? ""
+        self.title = title
+        rows = (json["rows"] as? [JSONObject] ?? []).compactMap { row in
+            let values = (row["values"] as? [Any] ?? []).map { String(describing: $0) }.filter { !$0.isEmpty }
+            guard !values.isEmpty else { return nil }
+            return CardRowInfo(
+                icon: row["icon"] as? String ?? "text",
+                style: row["style"] as? String ?? "text",
+                label: row["label"] as? String,
+                values: values
+            )
+        }
+        let badge = json["badge"] as? JSONObject
+        badgeIcon = badge?["icon"] as? String
+        badgeText = badge?["text"] as? String
+    }
+
+    /// SF Symbol for a row icon id from the core.
+    static func symbol(_ icon: String) -> String {
+        switch icon {
+        case "clock": return "clock"
+        case "person": return "person"
+        case "pin": return "mappin.and.ellipse"
+        case "video": return "video"
+        case "folder": return "folder"
+        case "list": return "list.bullet"
+        case "link": return "link"
+        default: return "text.alignleft"
+        }
+    }
+}
+
 /// An approval preview built by the core from the connector's own summary.
 struct Preview: Identifiable {
     var id: String { callId }
@@ -27,6 +82,7 @@ struct Preview: Identifiable {
     let verb: String
     let summary: String
     let fields: [PreviewField]
+    let card: PreviewCard?
     let raw: JSONObject
     let destructive: Bool
     let edited: Bool
@@ -45,6 +101,7 @@ struct Preview: Identifiable {
         fields = (json["fields"] as? [JSONObject] ?? []).map {
             PreviewField(key: $0["key"] as? String ?? "", label: $0["label"] as? String ?? "", type: $0["type"] as? String ?? "text", value: $0["value"] ?? "")
         }
+        card = PreviewCard(json["card"] as? JSONObject)
         raw = json["raw"] as? JSONObject ?? [:]
         destructive = (json["risk"] as? String) == "destructive"
         edited = (json["state"] as? String) == "edited"

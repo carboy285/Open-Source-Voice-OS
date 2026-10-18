@@ -53,6 +53,13 @@ When a surface is replaced, it shrinks back into the notch along the path it cam
 - Every animation can be interrupted. Pressing the hotkey while a card is shrinking reverses it from its current size; nothing waits for an animation to finish, and input is never blocked during one.
 - The listening surface appears with no delay on hotkey down.
 
+## Look
+
+- The surface is black through the notch and eases into a deep charcoal below it, so it still joins the hardware notch. An approval card adds a faint blue glow along the bottom edge.
+- Content fades in with a small rise and a soft blur, one item after another (about 60 ms apart). With Reduce Motion it is a plain fade.
+- **Preview cards.** An approval is drawn as a card that fits the task, chosen by the core from the tool and its input (`src/gate/card.ts`): a header with the app and a label (New event, New email, New reminder, New message, File change), the title with an accent rule, then rows. An event shows the time ("Thursday · 2:00 – 2:30 PM"), people as pills, the place and a short note; an email shows recipients and a short body; a reminder shows its time and list. A video call that will be added shows as a badge beside the buttons. A tool the core does not recognise gets a generic card with the first few values. The card is only a way to draw the preview: Edit still shows every field, and Details still shows the raw input. Card text is plain text and is cut to a fixed length.
+- Reduce Transparency and Increase Contrast: plain black, no gradient or glow.
+
 ## Accessibility
 
 - **Reduce Motion:** cross-fade between surfaces instead of growing and shrinking; no pulse.

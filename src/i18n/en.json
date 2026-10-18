@@ -253,5 +253,10 @@
   "settings.apps.failed": "Couldn't connect: {error}",
   "settings.apps.empty": "No apps found.",
   "settings.apps.privacy": "What the agent reads from these apps passes through Composio's servers. Anything that sends or changes something still shows you a preview first.",
-  "settings.apps.need_key": "Add your Composio key to connect apps."
+  "settings.apps.need_key": "Add your Composio key to connect apps.",
+  "card.kind.event": "New event",
+  "card.kind.email": "New email",
+  "card.kind.reminder": "New reminder",
+  "card.kind.message": "New message",
+  "card.kind.file": "File change"
 }

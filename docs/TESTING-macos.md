@@ -94,6 +94,15 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 
 **4.0 ChatGPT subscription.** In Settings › Agent choose "ChatGPT subscription" and click "Sign in with ChatGPT". Murmur shows a code and opens OpenAI's page. Enter the code there and approve. Expect "Signed in as <your email>" within a few seconds, and no API key needed. Then hold Right Option + Shift and ask for something simple. "Sign out" removes it. The sign-in is stored in your keychain as `llm/chatgpt`; the API key option still works.
 
+### 4.4 Approval cards
+
+1. Say "Add lunch with Sam tomorrow at noon to my calendar." The approval card has a black top that joins the notch, a charcoal body, a faint blue glow along the bottom, and a header reading "New event". The title has a blue line under it. Below it: the time ("Tomorrow · 12:00 – 1:00 PM"), then Sam's address as a pill if there is one. The rows fade in one after another, not all at once.
+2. Say "Email Ana that I'll be late." The card says "New email", with Ana's address as a pill and a short body.
+3. Say "Remind me to call Mum tomorrow at 5." The card says "New reminder" with the time.
+4. Click Edit: the card turns into the plain fields. Save returns to the card with the new values.
+5. Ask for something unusual (an MCP tool): a generic card with the first few values, never a blank card.
+6. System Settings › Accessibility › Display: turn on Reduce Motion (rows just fade, no rise or blur), then Reduce Transparency (plain black, no gradient or glow).
+
 ### 4.5 Apps through Composio
 
 1. Settings › Apps shows a field for a Composio API key. Paste a wrong key: you see "Composio didn't accept the API key". Paste a real one: the key is saved and a list of apps appears, with the most used first.

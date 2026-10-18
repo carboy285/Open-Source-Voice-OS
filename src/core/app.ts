@@ -195,6 +195,7 @@ export class MurmurCore {
       clock: this.clock,
       saveTranscripts: () => this.settings.get("history.saveTranscripts"),
       timeZone: localTimeZone,
+      locale: () => (this.locale === "ja" ? "ja-JP" : "en-US"),
       limits: () => ({
         maxSteps: this.settings.get("agent.maxSteps"),
         maxWallMs: this.settings.get("agent.maxWallMs"),

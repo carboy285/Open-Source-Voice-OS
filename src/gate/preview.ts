@@ -1,4 +1,5 @@
 import type { FieldType, ToolCall, ToolSpec, Verb } from "../core/types.js";
+import { buildCard, type Card, type CardContext } from "./card.js";
 import { classify, type Risk } from "./classify.js";
 import type { JsonSchema } from "./schema.js";
 
@@ -18,6 +19,8 @@ export interface Preview {
   /** One line from the connector's summarize(), never from the model. */
   summary: string;
   fields: PreviewField[];
+  /** How the shell draws the preview: an event, an email, a reminder... See card.ts. */
+  card?: Card;
   raw: Record<string, unknown>;
   risk: Risk;
   state: "pending" | "edited";
@@ -90,7 +93,13 @@ export function buildPreview(
   call: ToolCall,
   spec: ToolSpec,
   input: Record<string, unknown>,
-  extra: { state: Preview["state"]; stage: Preview["stage"]; expiresAt: number; errors?: string[] },
+  extra: {
+    state: Preview["state"];
+    stage: Preview["stage"];
+    expiresAt: number;
+    errors?: string[];
+    card?: CardContext;
+  },
 ): Preview {
   const { risk, verb } = classify(spec);
   const displayName = spec.preview?.displayName ?? spec.annotations?.title ?? spec.name;
@@ -100,6 +109,18 @@ export function buildPreview(
   } catch {
     summary = genericSummary(displayName, input);
   }
+  const { card: cardContext, ...rest } = extra;
+  let card: Card | undefined;
+  try {
+    card = buildCard(
+      { name: spec.name, icon: spec.preview?.icon ?? (spec.origin === "mcp" ? "mcp" : "tool"), app: displayName },
+      input,
+      summary,
+      cardContext ?? { now: Date.now(), timeZone: "UTC", locale: "en-US" },
+    );
+  } catch {
+    // A card is only a nicer way to draw the preview; the fields below are always enough.
+  }
   return {
     callId: call.id,
     tool: spec.name,
@@ -108,9 +129,10 @@ export function buildPreview(
     verb,
     summary,
     fields: buildFields(spec, input),
+    ...(card ? { card } : {}),
     raw: structuredClone(input),
     risk,
-    ...extra,
+    ...rest,
   };
 }
 
