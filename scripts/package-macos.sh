@@ -53,6 +53,13 @@ cp "$WORK/node" "$APP/Contents/Resources/core/node"
 cp build/core/murmur-core.mjs "$APP/Contents/Resources/core/murmur-core.mjs"
 cp "$WORK/node-v$NODE_VERSION-darwin-arm64/LICENSE" "$APP/Contents/Resources/core/NODE-LICENSE"
 cp LICENSE NOTICE "$APP/Contents/Resources/"
+cat > "$APP/Contents/Resources/core/murmur" <<'SHIM'
+#!/bin/sh
+# murmur CLI: link it into your PATH, e.g. ln -s /Applications/Murmur.app/Contents/Resources/core/murmur /usr/local/bin/murmur
+DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+exec "$DIR/node" --disable-warning=ExperimentalWarning "$DIR/murmur-core.mjs" "$@"
+SHIM
+chmod +x "$APP/Contents/Resources/core/murmur"
 [ -f build/core/murmur-core.mjs.LEGAL.txt ] && cp build/core/murmur-core.mjs.LEGAL.txt "$APP/Contents/Resources/core/THIRD-PARTY.txt"
 
 echo "==> Making the icon"

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- The UI is written in C# without XAML, so the project needs only the framework reference,
+         not the XAML build tasks. That keeps it buildable from any OS with the .NET 8 SDK. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>Murmur</AssemblyName>
+    <RootNamespace>Murmur</RootNamespace>
+    <Version>0.1.0</Version>
+    <Product>Murmur</Product>
+    <Copyright>Murmur contributors. Apache License 2.0.</Copyright>
+    <ApplicationIcon>..\..\..\assets\icon\murmur.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Lets CI and contributors on macOS/Linux compile the project; it only runs on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+</Project>

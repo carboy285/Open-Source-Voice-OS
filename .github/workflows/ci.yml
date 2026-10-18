@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: Core (lint, typecheck, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run bundle:core
+
+  macos:
+    name: macOS shell
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the Swift package
+        working-directory: native/macos
+        run: swift build
+      - uses: actions/setup-node@v4
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build the dmg (unsigned)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          npm ci
+          scripts/package-macos.sh
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        with:
+          name: murmur-macos-dmg
+          path: build/installers/*.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows shell
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build the WPF app
+        working-directory: native/windows
+        run: dotnet build Murmur.sln -c Release
+      - uses: actions/setup-node@v4
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build the installer (unsigned)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          npm ci
+          ./scripts/package-windows.ps1
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        with:
+          name: murmur-windows-installer
+          path: build/installers/*.exe
+          if-no-files-found: error
