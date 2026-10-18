@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Voice OS</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; background: transparent; font: 13px -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+  #pill {
+    margin: 6px auto 0; width: fit-content; max-width: 460px; padding: 8px 16px; border-radius: 18px;
+    background: rgba(20, 20, 22, 0.92); color: #f5f5f7; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    display: flex; gap: 10px; align-items: center; opacity: 0; transform: translateY(-6px);
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  #pill.show { opacity: 1; transform: none; }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: #8e8e93; flex: none; }
+  .listening #dot { background: #ff453a; animation: pulse 1s infinite; }
+  .thinking #dot { background: #ffd60a; animation: pulse 0.6s infinite; }
+  .done #dot { background: #32d74b; }
+  .error #dot { background: #ff9f0a; }
+  #text { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+  @keyframes pulse { 50% { opacity: 0.35; } }
+</style>
+<div id="pill"><span id="dot"></span><span id="text"></span></div>
+<script>
+  const pill = document.getElementById("pill");
+  const text = document.getElementById("text");
+  window.voiceos.onOverlay(({ state, label }) => {
+    pill.className = state === "idle" ? "" : `show ${state}`;
+    text.textContent = label || "";
+  });
+</script>

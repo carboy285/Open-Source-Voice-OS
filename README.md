@@ -4,8 +4,9 @@ An open-source voice layer for your computer, in the spirit of tools like VoiceO
 selected text by voice, and hand tasks to an agent that uses MCP tools (including [REA](https://github.com/morluto/rea)
 for reverse engineering). Written from public product descriptions only; it contains no code from any commercial app.
 
-> **Status: early.** The engine and CLI work and are tested. The desktop shell (global hotkeys, microphone capture,
-> typing into the focused app, screen-pointing overlay) is not built yet.
+> **Status: early.** The engine, CLI and the macOS menu-bar app are written, typechecked and unit-tested, but the
+> macOS app has not yet been run on a Mac (it was built on Linux). Expect first-run problems and please report them.
+> Not built yet: the screen-pointing overlay, Windows/Linux shells, and custom vocabulary.
 
 ## Use your ChatGPT / Codex plan
 
@@ -24,6 +25,36 @@ To use Claude instead: `VOICEOS_LLM=anthropic ANTHROPIC_API_KEY=... voiceos ...`
 Each model call starts a fresh, ephemeral, read-only Codex run with your Codex config ignored, and Codex is told to
 answer only with JSON. Tool use is handled by Voice OS itself, not by Codex, so the confirmation rules below always apply.
 Calls take a few seconds because each one starts a Codex process; they time out after 120 seconds.
+
+## macOS app
+
+A menu-bar app (Electron). Hold a key, speak, release:
+
+| Hold        | Does                                                     |
+| ----------- | -------------------------------------------------------- |
+| Right ⌥     | Dictate: cleaned-up text is typed into the focused app   |
+| Right ⌘     | Edit: rewrites the selected text from your spoken request |
+| Right ⌃     | Agent: runs your request with MCP tools (REA etc.)       |
+
+If another key is pressed while a hotkey is held (for example ⌘C), the recording is cancelled. A tap shorter than
+0.3 s is ignored. Status appears in a pill at the top of the screen.
+
+```bash
+brew install whisper-cpp          # local speech-to-text
+npm install -g @openai/codex      # model access with your ChatGPT plan
+npm install && npm run app        # builds and launches
+```
+
+Then, from the menu-bar item: **Sign in with ChatGPT (Codex)…**, and **Open settings file…** to set `whisperModel`
+to a downloaded ggml model (and `mcpConfig` to give the agent tools). Settings live in
+`~/Library/Application Support/Open Source Voice OS/config.json`.
+
+macOS asks for three permissions: **Microphone**, **Accessibility** (to paste text and copy selections) and
+**Input Monitoring** (to see the hold-to-talk keys). Grant them in System Settings → Privacy & Security, then restart
+the app. Text is inserted by putting it on the clipboard and pressing ⌘V; your previous text clipboard is restored.
+Recordings are written to a temporary file for Whisper and deleted right after.
+
+`npm run app:dist` builds an unsigned `.dmg`; signing and notarization need your Apple developer credentials.
 
 ## Commands
 

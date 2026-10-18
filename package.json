@@ -2,12 +2,14 @@
   "name": "open-source-voice-os",
   "version": "0.1.0",
   "description": "Open-source voice layer for your computer: dictation, voice edit and an MCP-powered agent mode.",
-  "main": "dist/index.js",
+  "main": "dist/app/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "dev": "tsx src/cli/main.ts"
+    "dev": "tsx src/cli/main.ts",
+    "app": "npm run build && electron .",
+    "app:dist": "npm run build && electron-builder --mac"
   },
   "repository": {
     "type": "git",
@@ -21,10 +23,13 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "uiohook-napi": "^1.5.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
@@ -35,5 +40,34 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "build": {
+    "appId": "org.opensourcevoiceos.app",
+    "productName": "Open Source Voice OS",
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/uiohook-napi/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSMicrophoneUsageDescription": "Voice OS listens while you hold a hotkey so it can turn your speech into text and actions.",
+        "NSAppleEventsUsageDescription": "Voice OS types the text you dictate into the app you are using."
+      }
+    }
   }
 }
