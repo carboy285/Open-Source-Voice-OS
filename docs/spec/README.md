@@ -9,7 +9,7 @@ Each row or claim ends with a source tag.
 | Tag | Meaning |
 |-----|---------|
 | `B-…` | Public product behavior, as listed in the project brief (taken from the original product's public website, public docs and public changelog). These describe *what* a user sees, never *how* it is built. |
-| `U-n` | A black-box observation the project owner made in their own licensed trial, numbered in `OBSERVATIONS.md` (none yet). |
+| `U-n` | A black-box observation by the project owner (their licensed trial, or the original product's public website), numbered in `OBSERVATIONS.md`. Behavior and placement only. |
 | `D` | A Murmur design decision. It is not a claim about any other product. |
 
 No binary, installer, decompiled code, network capture or asset of any other product was used. See `LEGAL.md`.
@@ -54,5 +54,6 @@ No binary, installer, decompiled code, network capture or asset of any other pro
 | `storage.md` | Local data model |
 | `privacy.md` | Privacy guarantees and diagnostics |
 | `platform.md` | Shells, hotkeys, permissions, i18n, core↔shell protocol |
+| `notch.md` | macOS notch surfaces: placement, priority, focus, motion |
 | `OBSERVATIONS.md` | Owner trial notes (black-box) |
 | `COVERAGE.md` | Status, confidence and open questions |

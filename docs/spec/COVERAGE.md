@@ -24,6 +24,7 @@
 | Privacy guarantees | privacy.md | specified | high | — |
 | Anonymous opt-in diagnostics | privacy.md | specified | medium | Field list is ours; no endpoint exists |
 | Menu-bar / tray app | platform.md | specified | high | — |
+| Notch surfaces (macOS) | notch.md | specified | medium | Placement from U-1; the rest is Murmur's own design |
 | Permission onboarding | platform.md | specified | high | — |
 | EN/JA UI | platform.md | specified | high | — |
 | Local storage | storage.md | specified | n/a (Murmur design) | — |
