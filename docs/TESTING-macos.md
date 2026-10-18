@@ -114,6 +114,19 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 7. Press ⌃⌥T, then click into another app: the box closes without sending. Press ⌃⌥T while holding the dictation key: nothing opens.
 8. Settings › Agent › Spoken replies: turn Read replies aloud off and ask again (silent). Pick another voice and press Test voice. Move the Speed slider and test again. While a reply is speaking, the reply card shows a small speaker button that stops it.
 
+### 4.46 Circle to Ask and the screen
+
+1. Settings › Agent › Circle to Ask and screen: the switch is on. If it says "Needs Screen Recording", click Allow…, turn Murmur on in System Settings › Privacy & Security › Screen Recording, and reopen Murmur.
+2. Hold Right Option + Control. The screen dims a little and the pointer is a crosshair. Let go without drawing: the dimming goes away and nothing opens.
+3. Hold the keys again, press the mouse and drag a loop around a photo, a chart or a paragraph on a web page, then let go of the mouse. A card grows out of the notch showing "Reading the area…", then a small preview of what you circled, four quick buttons and a text box with the cursor in it.
+4. Press Explain. The reply describes what you circled (not the whole screen) and is read aloud if Spoken replies is on. Then type "and what is the second line?" and press Return: it uses the first answer.
+5. Circle some text and press Copy text: "Copied N characters" appears, and pasting elsewhere gives the words in the area. Press Esc on the card: it closes without sending.
+6. Circle a very small area or just click: nothing happens. Press Esc while drawing: it cancels.
+7. Press ⌃⌥T, turn on "Include a picture of my window", and ask "What am I looking at?" The answer is about the app you were in. Turn on Settings › Include a picture of my window with every Ask and ask by voice: same.
+8. With a model that cannot see images (an OpenAI-compatible server with "My model can see images" off), circle some text and press Explain: it answers from the words read in the area.
+9. Turn off Screen Recording for Murmur in System Settings and hold the keys: no sheet appears, a message says what to allow.
+10. Ask "reply to this email saying I'll be there at 3" with an email open: an approval card named "Write into the app" shows the text. After you approve, it appears in the reply box; it never types into a password field.
+
 ### 4.5 Apps through Composio
 
 1. Settings › Apps shows a field for a Composio API key. Paste a wrong key: you see "Composio didn't accept the API key". Paste a real one: the key is saved and a list of apps appears, with the most used first.

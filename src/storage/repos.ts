@@ -24,6 +24,10 @@ export const DEFAULT_SETTINGS = {
   "mcp.callTimeoutMs": 60_000,
   "connectors.enabled": ["reminders", "files", "write"] as string[],
   "connectors.settings": {} as Record<string, Record<string, unknown>>,
+  /** Circle to Ask: hold the circle key and drag around something on the screen. */
+  "circle.enabled": true,
+  /** Send a picture of the window with every Ask, not only when the typing box asks for it. */
+  "screen.attach": false,
   "tts.enabled": true,
   /** Voice identifier from the shell; empty picks a voice that matches the reply's language. */
   "tts.voice": "",

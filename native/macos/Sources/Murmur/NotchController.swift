@@ -9,6 +9,7 @@ enum NotchSurface: Equatable {
     case approval(String)
     case progress(String)
     case typing
+    case circle
 
     var key: String {
         switch self {
@@ -18,6 +19,7 @@ enum NotchSurface: Equatable {
         case let .approval(id): return "approval-\(id)"
         case let .progress(id): return "progress-\(id)"
         case .typing: return "typing"
+        case .circle: return "circle"
         }
     }
 
@@ -51,6 +53,7 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
     static let approvalWidth: CGFloat = 460
     static let reportWidth: CGFloat = 380
     static let typingWidth: CGFloat = 460
+    static let circleWidth: CGFloat = 480
 
     init(model: AppModel) {
         self.model = model
@@ -116,6 +119,11 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
                 width: max(NotchController.typingWidth, notch.width + 40),
                 height: notch.height + contentHeight("typing")
             )
+        case .circle:
+            return CGSize(
+                width: max(NotchController.circleWidth, notch.width + 40),
+                height: notch.height + contentHeight("circle")
+            )
         }
     }
 
@@ -125,7 +133,7 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
         case .hidden: return 10
         case .listening, .progress: return 16
         case .report: return 18
-        case .approval, .typing: return 22
+        case .approval, .typing, .circle: return 22
         }
     }
 
@@ -165,6 +173,7 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
         default:
             break
         }
+        if model.circle != nil { return .circle }
         if model.typingOpen { return .typing }
         if model.reportVisible { return .report }
         if let first = model.approvals.first { return .approval(first.callId) }
@@ -193,12 +202,12 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
             let fresh = NotchGeometry(screen: NotchGeometry.pointerScreen())
             if fresh != geometry { geometry = fresh }
         }
-        if previous.isApproval || previous == .typing { releaseFocus() }
+        if previous.isApproval || previous == .typing || previous == .circle { releaseFocus() }
         if next != .report { reportExpanded = false }
         placePanel()
         surface = next
         if next != .hidden { panel?.orderFrontRegardless() }
-        if next == .typing { focusTyping() }
+        if next == .typing || next == .circle { focusTyping() }
         announce(next)
         refreshMouse()
     }
@@ -344,6 +353,7 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
         previousApp = nil
         // Clicking into another app abandons a half-typed request; an approval, by contrast, stays.
         if surface == .typing { model.closeTyping() }
+        if surface == .circle { model.cancelCircle() }
     }
 
     // MARK: Report
@@ -380,6 +390,8 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
             text = task.currentStep ?? L("panel.status.\(task.status)")
         case .typing:
             text = L("typing.announce")
+        case .circle:
+            text = L("circle.announce")
         }
         guard !text.isEmpty else { return }
         NSAccessibility.post(

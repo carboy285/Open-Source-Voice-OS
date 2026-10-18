@@ -14,6 +14,16 @@ enum TypingMode: Equatable {
     case ask, edit
 }
 
+/// The area you circled: a small picture, the words read in it, and what you were working in.
+struct CircleCapture {
+    var loading = true
+    var thumbnail: NSImage?
+    var mediaType = "image/png"
+    var imageBase64: String?
+    var text = ""
+    var context: JSONObject = [:]
+}
+
 /// The ChatGPT sign-in as the Settings screen shows it.
 struct ChatGptState {
     var signedIn = false
@@ -79,6 +89,13 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     /// True while a reply is being read aloud.
     @Published var speaking = false
     let speaker = Speaker()
+    /// Circle to Ask (hold the key, drag around something): the card that follows.
+    @Published var circle: CircleCapture? { didSet { windows.updateNotch() } }
+    /// Typed Ask: also send a picture of the window you were in.
+    @Published var typingAttachScreen = false
+    private let circleOverlay = CircleOverlay()
+    private var circleContext: JSONObject = [:]
+    private var typingFrontPID: pid_t = 0
     /// The app and selection seen before the box took focus; sent with the request.
     private var typingContext: JSONObject = [:]
     @Published var micStatus = Permissions.microphone
@@ -120,11 +137,22 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
         speech.onChange = { [weak self] in self?.refreshStatus() }
         hotkey.onActionChange = { [weak self] action in
-            guard let self, self.state == .listening else { return }
+            guard let self else { return }
+            // Control added after the key went down: this was not a dictation after all.
+            if action == .circle, self.state == .listening {
+                self.cancelListening()
+                self.action = .circle
+                self.beginCircle()
+                return
+            }
+            guard self.state == .listening else { return }
             self.action = action
         }
         speaker.onChange = { [weak self] speaking in self?.speaking = speaking }
-        hotkey.onEscape = { [weak self] in self?.cancelListening() }
+        hotkey.onEscape = { [weak self] in
+            self?.cancelListening()
+            self?.cancelCircle()
+        }
         hotkey.onTypeShortcut = { [weak self] in self?.toggleTyping() }
         hotkey.onFocusShortcut = { [weak self] in self?.windows.notch.focusApproval() }
         // Creating the event tap without permission files a TCC request on every launch, so check first.
@@ -242,6 +270,11 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         // Talking over the reply, and the microphone hearing it, are both worse than stopping it.
         speaker.stop()
         closeTyping()
+        if action == .circle {
+            self.action = action
+            beginCircle()
+            return
+        }
         self.action = action
         pressStarted = Date()
         // Setting the state shows the listening surface right away.
@@ -260,6 +293,11 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     }
 
     private func hotkeyUp() {
+        if action == .circle {
+            // Letting go before drawing cancels; letting go mid-drag still finishes when the mouse is released.
+            if circleOverlay.isShowing, !circleOverlay.isDragging { circleOverlay.hide() }
+            return
+        }
         // Whatever moved the state away, an open microphone means the hold is still being recorded.
         if audio.isRecording, state != .listening, state != .transcribing {
             NSLog("Murmur: state was %@ while recording; restoring", state.rawValue)
@@ -293,9 +331,14 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             }
         case .agent:
             state = .agent
-            core.request("agent.run", audioParams, timeout: 60) { [weak self] result in
-                if case let .failure(error) = result { self?.showError(error.localizedDescription) }
+            let attach = settings["screen.attach"] as? Bool ?? false
+            attachWindowPicture(to: audioParams, pid: NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0, include: attach) { [weak self] params in
+                self?.core.request("agent.run", params, timeout: 60) { result in
+                    if case let .failure(error) = result { self?.showError(error.localizedDescription) }
+                }
             }
+        case .circle:
+            break
         }
     }
 
@@ -310,6 +353,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         guard state != .listening, !audio.isRecording else { return }
         speaker.stop()
         typingContext = ContextCapture.capture()
+        typingFrontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+        typingAttachScreen = settings["screen.attach"] as? Bool ?? false
         typingSelectionLength = (typingContext["selection"] as? String)?.count ?? 0
         typingMode = mode
         reportTimer?.invalidate()
@@ -335,8 +380,11 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         case .ask:
             action = .agent
             state = .agent
-            core.request("agent.run", ["transcript": request, "context": context], timeout: 60) { [weak self] result in
-                if case let .failure(error) = result { self?.showError(error.localizedDescription) }
+            let params: JSONObject = ["transcript": request, "context": context]
+            attachWindowPicture(to: params, pid: typingFrontPID, include: typingAttachScreen) { [weak self] params in
+                self?.core.request("agent.run", params, timeout: 60) { result in
+                    if case let .failure(error) = result { self?.showError(error.localizedDescription) }
+                }
             }
         case .edit:
             action = .edit
@@ -347,6 +395,115 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                 case let .failure(error): self?.showError(error.localizedDescription)
                 }
             }
+        }
+    }
+
+    // MARK: Circle to Ask and looking at the screen
+
+    /// Starts Circle to Ask: a sheet over the screen where the pointer is, to draw on.
+    func beginCircle() {
+        guard settings["circle.enabled"] as? Bool ?? true else { return }
+        guard #available(macOS 14.0, *) else {
+            showError(L("circle.needs_macos14"))
+            return
+        }
+        guard Permissions.screenRecording == .granted else {
+            Permissions.requestScreenRecording()
+            showError(L("circle.need_permission"))
+            return
+        }
+        speaker.stop()
+        closeTyping()
+        circle = nil
+        circleContext = ContextCapture.capture()
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main else { return }
+        circleOverlay.show(on: screen) { [weak self] region in
+            guard let self, let region else {
+                self?.circleOverlay.hide()
+                return
+            }
+            self.finishCircle(region, screen: screen)
+        }
+    }
+
+    func cancelCircle() {
+        circleOverlay.hide()
+        if circle != nil { circle = nil }
+    }
+
+    private func finishCircle(_ region: CGRect, screen: NSScreen) {
+        circleOverlay.hide()
+        guard #available(macOS 14.0, *), let displayID = ScreenGrabber.displayID(of: screen) else {
+            showError(L("circle.capture_failed"))
+            return
+        }
+        circle = CircleCapture(context: circleContext)
+        Task { @MainActor in
+            // Let the sheet leave the screen before the picture is taken.
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            do {
+                let image = try await ScreenGrabber.capture(region: region, displayID: displayID)
+                let text = await TextReader.read(image)
+                guard var capture = self.circle else { return }
+                let encoded = ImagePrep.encode(image)
+                capture.loading = false
+                capture.thumbnail = NSImage(cgImage: image, size: NSSize(width: region.width, height: region.height))
+                capture.mediaType = encoded?.mediaType ?? "image/png"
+                capture.imageBase64 = encoded?.base64
+                capture.text = text
+                self.circle = capture
+            } catch {
+                NSLog("Murmur: circle capture failed: %@", error.localizedDescription)
+                self.circle = nil
+                self.showError(L("circle.capture_failed"))
+            }
+        }
+    }
+
+    /// Sends a question about the circled area: the picture, the words read in it, and the app you were in.
+    func submitCircle(_ prompt: String) {
+        let request = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let capture = circle, !capture.loading, !request.isEmpty else { return }
+        var context = capture.context
+        context["picture"] = "circle"
+        context["circledText"] = capture.text
+        var params: JSONObject = ["transcript": request, "context": context]
+        if let data = capture.imageBase64 { params["images"] = [["mediaType": capture.mediaType, "data": data] as JSONObject] }
+        circle = nil
+        speaker.stop()
+        reportTimer?.invalidate()
+        reportVisible = false
+        action = .agent
+        state = .agent
+        core.request("agent.run", params, timeout: 60) { [weak self] result in
+            if case let .failure(error) = result { self?.showError(error.localizedDescription) }
+        }
+    }
+
+    /// Copies the words read in the circled area, with no AI involved.
+    func copyCircleText() {
+        guard let capture = circle, !capture.text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(capture.text, forType: .string)
+        circle = nil
+        report = []
+        reportMessage = L("circle.copied", ["count": String(capture.text.count)])
+        state = .done
+        showReport(seconds: 3)
+    }
+
+    /// Adds a picture of an app's window to a request, when asked for and allowed. Otherwise the request goes as it is.
+    private func attachWindowPicture(to params: JSONObject, pid: pid_t, include: Bool, send: @escaping (JSONObject) -> Void) {
+        guard include, pid != 0, #available(macOS 14.0, *), Permissions.screenRecording == .granted else {
+            send(params)
+            return
+        }
+        Task { @MainActor in
+            var out = params
+            if let image = try? await ScreenGrabber.captureWindow(pid: pid), let encoded = ImagePrep.encode(image) {
+                out["images"] = [["mediaType": encoded.mediaType, "data": encoded.base64] as JSONObject]
+            }
+            send(out)
         }
     }
 

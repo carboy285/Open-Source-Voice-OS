@@ -20,6 +20,8 @@
 | MCP via CLI | mcp.md | specified | medium | The original's exact CLI syntax beyond "add mcp" is unknown; ours is Murmur's own |
 | Long tasks in side panel, self-reporting | agent.md | specified | medium | — |
 | Task history | agent.md | specified | medium | — |
+| Circle to Ask (circle an area, ask AI) | notch.md | implemented on Mac | n/a (Murmur design) | Windows not yet |
+| Pictures to the model (vision) | agent.md | implemented (Claude, ChatGPT, opt-in for local servers) | n/a (Murmur design) | — |
 | Reminders | reminders.md | specified | medium | Whether reminders sync to the OS Reminders/Calendar app; ours are local |
 | Privacy guarantees | privacy.md | specified | high | — |
 | Anonymous opt-in diagnostics | privacy.md | specified | medium | Field list is ours; no endpoint exists |

@@ -3,6 +3,8 @@ import CoreGraphics
 
 enum HotkeyAction {
     case dictate, agent, edit
+    /// Hold the key with Control and drag to circle something on the screen. No microphone.
+    case circle
 }
 
 /// Watches a modifier-only hotkey (Right Option by default) with a listen-only event tap.
@@ -138,6 +140,7 @@ final class HotkeyMonitor {
     private static func action(for flags: CGEventFlags) -> HotkeyAction {
         if flags.contains(.maskShift) { return .agent }
         if flags.contains(.maskCommand) { return .edit }
+        if flags.contains(.maskControl) { return .circle }
         return .dictate
     }
 

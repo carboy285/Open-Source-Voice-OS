@@ -145,6 +145,9 @@ struct NotchSurfaceView: View {
         case .typing:
             TypingContent(notch: notch, width: width)
                 .transition(.opacity)
+        case .circle:
+            CircleContent(notch: notch, width: width)
+                .transition(.opacity)
         }
     }
 }
@@ -163,6 +166,7 @@ struct ListeningContent: View {
         case .dictate: return L("notch.mode.dictate")
         case .agent: return L("notch.mode.ask")
         case .edit: return L("notch.mode.edit")
+        case .circle: return L("notch.mode.ask")
         }
     }
 
@@ -171,6 +175,7 @@ struct ListeningContent: View {
         case .dictate: return "mic.fill"
         case .agent: return "sparkles"
         case .edit: return "pencil"
+        case .circle: return "viewfinder.circle"
         }
     }
 
@@ -522,6 +527,13 @@ struct TypingContent: View {
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NotchPalette.hairline, lineWidth: 1))
                 .accessibilityLabel(prompt)
                 .fadeIn(1)
+            if model.typingMode == .ask {
+                Toggle(L("typing.attach_screen"), isOn: $model.typingAttachScreen)
+                    .toggleStyle(.checkbox)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fadeIn(2)
+            }
             HStack {
                 Text(hint).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
@@ -552,6 +564,121 @@ struct TypingContent: View {
         let request = trimmed
         text = ""
         model.submitTyping(request)
+    }
+}
+
+// MARK: Circle to Ask
+
+/// What you circled: a small picture, quick questions, and a box for your own. Return sends, Esc closes.
+struct CircleContent: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var strings: Strings
+    let notch: CGSize
+    let width: CGFloat
+    @State private var text = ""
+    @FocusState private var fieldFocused: Bool
+
+    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var loading: Bool { model.circle?.loading ?? true }
+    private var readText: String { model.circle?.text ?? "" }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.m) {
+            HStack(spacing: Space.s) {
+                Image(systemName: "viewfinder.circle").foregroundStyle(NotchPalette.accent).accessibilityHidden(true)
+                Text(L("circle.title")).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                Spacer()
+                Button {
+                    model.cancelCircle()
+                } label: {
+                    Image(systemName: "xmark").font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .keyboardShortcut(.cancelAction)
+                .accessibilityLabel(L("typing.close"))
+            }
+            .fadeIn(0)
+            if loading {
+                HStack(spacing: Space.s) {
+                    ProgressView().controlSize(.small)
+                    Text(L("circle.reading")).font(.callout).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, Space.l)
+            } else {
+                if let picture = model.circle?.thumbnail {
+                    Image(nsImage: picture)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: 120)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NotchPalette.hairline, lineWidth: 1))
+                        .accessibilityLabel(readText.isEmpty ? L("circle.title") : String(readText.prefix(200)))
+                        .fadeIn(1)
+                }
+                HStack(spacing: Space.s) {
+                    quick(L("circle.explain"), "sparkles") { model.submitCircle(L("circle.prompt.explain")) }
+                    quick(L("circle.search"), "magnifyingglass") { model.submitCircle(L("circle.prompt.search")) }
+                    quick(L("circle.translate"), "character.bubble") { model.submitCircle(L("circle.prompt.translate")) }
+                    quick(L("circle.copy"), "doc.on.doc", disabled: readText.isEmpty) { model.copyCircleText() }
+                }
+                .fadeIn(2)
+                TextField(L("circle.prompt"), text: $text)
+                    .textFieldStyle(.plain)
+                    .font(.body)
+                    .foregroundStyle(.white)
+                    .focused($fieldFocused)
+                    .onSubmit(send)
+                    .padding(Space.m)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NotchPalette.card))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NotchPalette.hairline, lineWidth: 1))
+                    .accessibilityLabel(L("circle.prompt"))
+                    .fadeIn(3)
+                HStack {
+                    Text(L("typing.hint")).font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button(L("typing.send"), action: send)
+                        .buttonStyle(PressableButtonStyle(prominent: true))
+                        .disabled(trimmed.isEmpty)
+                }
+                .fadeIn(4)
+            }
+        }
+        .padding(.horizontal, Space.l)
+        .padding(.top, Space.s)
+        .padding(.bottom, Space.l)
+        .frame(width: width, alignment: .leading)
+        .background(GeometryReader { proxy in
+            Color.clear.preference(key: NotchHeightKey.self, value: ["circle": proxy.size.height])
+        })
+        .padding(.top, notch.height)
+        .onChange(of: loading) { isLoading in
+            if !isLoading { DispatchQueue.main.async { fieldFocused = true } }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(L("circle.announce"))
+    }
+
+    private func quick(_ title: String, _ symbol: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(.callout)
+                .lineLimit(1)
+                .padding(.horizontal, Space.m)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(NotchPalette.chip))
+                .foregroundStyle(NotchPalette.chipText)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.4 : 1)
+    }
+
+    private func send() {
+        guard !trimmed.isEmpty else { return }
+        let request = trimmed
+        text = ""
+        model.submitCircle(request)
     }
 }
 

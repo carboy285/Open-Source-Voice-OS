@@ -67,3 +67,7 @@ On a Mac, three connectors (off until you turn them on in Settings › Connector
 ## Conversation memory and spoken replies
 
 The agent remembers the conversation so a follow-up like "move it to 4" makes sense: your earlier requests, its replies, and a short log of which tools ran. This is kept in memory only. It is not written to disk, and it is forgotten after 30 quiet minutes, with New chat, or when Murmur quits. While it lasts, the earlier turns are sent to your model provider with each new request, as part of the request. Spoken replies use your Mac's own voices; the text is not sent anywhere for that.
+
+## Circle to Ask and pictures of your window
+
+When you circle something (or switch on "Include a picture of my window"), Murmur takes a picture of that area or window with macOS Screen Recording, which you allow in System Settings. The words in it are read on your Mac. The picture and those words go to your own AI provider with your question, and nowhere else. Pictures are held in memory for that one request: they are not saved, and the chat memory keeps only a note that a picture was attached. A model that cannot see images gets the words alone. Murmur never watches the screen in the background; it looks only when you circle, or when you have asked it to include your window.

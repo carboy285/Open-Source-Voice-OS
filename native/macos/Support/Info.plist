@@ -46,7 +46,7 @@
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Murmur reads and adds items in Reminders only when you turn on the Reminders connector and ask the agent to.</string>
 	<key>NSScreenCaptureUsageDescription</key>
-	<string>Murmur can look at the area around your pointer when you ask it to do something and there is no text to read.</string>
+	<string>Murmur looks at the area you circle, or at your window when you ask it to, to answer questions about it. It reads the words on your Mac, and sends the picture only to your own AI provider.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Murmur contributors. Licensed under the Apache License 2.0.</string>
 </dict>

@@ -39,6 +39,12 @@ When a surface is replaced, it shrinks back into the notch along the path it cam
 
 For people who can't or would rather not speak. ⌃⌥T (or Ask by typing… in the menu) opens a card that grows out of the notch with a text field, an Ask / Edit switch, New chat, a Send button and a close button. The app and the selection are read **before** the card takes focus, and sent with the request, so Edit still works on the text the user had selected. Return sends; Esc or the close button closes. Clicking into another app closes it, and holding the dictation key closes it. After sending, the card closes, focus goes back to the user's app, and the reply shows as usual (and is read aloud if Spoken replies is on). It never opens while the microphone is open.
 
+## Circle to Ask
+
+Hold the dictation key with Control (Right Option + Control by default) and a faint sheet covers the screen under the pointer, with a crosshair. Press the mouse and drag around something (a loop or a box); let go to finish. The sheet leaves, Murmur takes a picture of just that area (never its own windows), reads the words in it on the Mac, and a card grows out of the notch: a small preview, quick questions (Explain, Search the web, Translate, Copy text) and a text box. Letting go of the key before drawing, or pressing Esc, cancels. A drawing smaller than 24 points means nothing. The question goes to the agent with the picture (for a model that can see) and the words read from it, so replies, follow-ups, spoken replies and approvals all work as for any Ask. Copy text uses no AI. It needs macOS 14 and Screen Recording; without them the card never opens and a message says what to allow. It never opens while the microphone is open.
+
+"Include a picture of my window" on the typing card (or Settings › Include a picture of my window with every Ask) adds the biggest window of the app you were in to an Ask, even when something covers it.
+
 ## Spoken replies
 
 Agent replies are read aloud with the Mac's own voices when Read replies aloud is on (Settings › Agent): the chosen voice, or the best installed voice for the reply's language, at the chosen speed. Speech stops when the dictation key is pressed, when the typing box opens, when a new request is sent, or from the speaker button on the reply card. Nothing is sent anywhere for speech.

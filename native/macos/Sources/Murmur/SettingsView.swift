@@ -196,6 +196,7 @@ struct AgentSettings: View {
                 TextField(L("settings.llm.model"), text: text(model, "llm.model"))
                 if provider == "openai-compatible" {
                     TextField(L("settings.llm.base_url"), text: text(model, "llm.baseUrl"))
+                    Toggle(L("settings.llm.vision"), isOn: flag(model, "llm.vision"))
                 }
                 HStack {
                     SecureField(L("settings.llm.api_key"), text: $apiKey)
@@ -211,6 +212,20 @@ struct AgentSettings: View {
             }
             if !model.llmReady {
                 Text(L("settings.llm.missing")).font(.callout).foregroundStyle(.orange)
+            }
+            Section(L("settings.circle.title")) {
+                Toggle(L("settings.circle.enabled", ["key": "\(model.hotkeyName) + Control"]), isOn: flag(model, "circle.enabled", default: true))
+                Toggle(L("settings.screen.attach"), isOn: flag(model, "screen.attach"))
+                Text(L("settings.circle.help")).font(.caption).foregroundStyle(.secondary)
+                if Permissions.screenRecording != .granted {
+                    HStack {
+                        Text(L("settings.circle.permission")).font(.caption).foregroundStyle(.orange)
+                        Button(L("settings.circle.allow")) {
+                            Permissions.requestScreenRecording()
+                            Permissions.openSettings("Privacy_ScreenCapture")
+                        }
+                    }
+                }
             }
             Section(L("settings.tts.title")) {
                 Toggle(L("settings.tts.enabled"), isOn: flag(model, "tts.enabled", default: true))

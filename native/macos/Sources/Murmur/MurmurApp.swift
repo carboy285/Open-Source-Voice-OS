@@ -49,6 +49,7 @@ struct MenuContent: View {
         Text(L("menu.hotkey.dictate", ["key": model.hotkeyName]))
         Text(L("menu.hotkey.agent", ["key": "\(model.hotkeyName) + Shift"]))
         Text(L("menu.hotkey.edit", ["key": "\(model.hotkeyName) + Command"]))
+        Text(L("menu.hotkey.circle", ["key": "\(model.hotkeyName) + Control"]))
         Divider()
         Menu(L("menu.recent")) {
             if model.recent.isEmpty {
