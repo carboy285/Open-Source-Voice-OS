@@ -16,9 +16,9 @@ const HELP = `Murmur ${VERSION}: voice dictation and a voice agent for your comp
 Usage:
   murmur daemon                      Run the core for a native shell (JSON-RPC on stdio)
   murmur clean "<text>" [--app <id>] Clean up a transcript and print the change report
-  murmur dictate --text <text> | --audio <file.wav> | --stdin
+  murmur dictate [--text] <text> | --audio <file.wav> | --stdin
                                      Clean up a transcript using your dictation settings
-  murmur agent --text <request> | --audio <file.wav> | --stdin
+  murmur agent [--text] <request> | --audio <file.wav> | --stdin
                                      Run an agent task in this terminal, with approvals
   murmur add mcp <name> -- <command> [args...]
   murmur add mcp <name> --url <https-url> [--header KEY=VALUE]...
@@ -76,7 +76,7 @@ async function main(argv: string[]): Promise<number> {
       return clean(rest);
     case "dictate":
     case "agent": {
-      const { values } = parseArgs({
+      const { values, positionals } = parseArgs({
         args: rest,
         options: {
           text: { type: "string" },
@@ -84,12 +84,18 @@ async function main(argv: string[]): Promise<number> {
           stdin: { type: "boolean" },
           help: { type: "boolean", short: "h" },
         },
+        allowPositionals: true,
       });
       if (values.help) {
         process.stdout.write(`${HELP}\n`);
         return 0;
       }
-      return runInput(await readInput(values), command);
+      // `murmur agent "remind me to call Ana"` still works: a bare request is the same as --text.
+      const bare = positionals.join(" ");
+      return runInput(
+        await readInput({ ...values, text: values.text ?? (positionals.length ? bare : undefined) }),
+        command,
+      );
     }
     case "version":
     case "--version":

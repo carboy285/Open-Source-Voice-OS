@@ -44,6 +44,19 @@ describe("CLI transcript sources", () => {
     expect((await cli(["dictate", "--text", "hello"])).stdout).toBe("Hello.\n");
   });
 
+  it("still takes a bare request, as before --text existed", async () => {
+    expect((await cli(["dictate", "hello"])).stdout).toBe("Hello.\n");
+    const agent = await cli(["agent", "remind me to call Ana"]);
+    expect(agent.stderr).not.toContain("Unexpected argument");
+    expect(agent.stderr).not.toContain("exactly one");
+  });
+
+  it("does not mix a bare request with another source", async () => {
+    const result = await cli(["dictate", "hello", "--stdin"], "x");
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("exactly one");
+  });
+
   it("accepts piped agent input before checking model configuration", async () => {
     const result = await cli(["agent", "--stdin"], "what reminders do I have");
     expect(result.code).toBe(1);
@@ -87,8 +100,8 @@ describe("CLI transcript sources", () => {
   it("documents stdin in command help", async () => {
     const result = await cli(["dictate", "--help"]);
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("murmur dictate --text <text> | --audio <file.wav> | --stdin");
-    expect(result.stdout).toContain("murmur agent --text <request> | --audio <file.wav> | --stdin");
+    expect(result.stdout).toContain("murmur dictate [--text] <text> | --audio <file.wav> | --stdin");
+    expect(result.stdout).toContain("murmur agent [--text] <request> | --audio <file.wav> | --stdin");
   });
 });
 

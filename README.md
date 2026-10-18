@@ -88,7 +88,7 @@ printf 'um hello there' | npx tsx src/cli/main.ts dictate --stdin
 printf 'what reminders do I have' | npx tsx src/cli/main.ts agent --stdin
 ```
 
-`dictate` and `agent` require exactly one input source: `--text <text>`, `--audio <file.wav>`, or `--stdin`.
+`dictate` and `agent` require exactly one input source: `--text <text>` (or just the quoted text), `--audio <file.wav>`, or `--stdin`.
 `--stdin` reads piped text and rejects empty input; in an interactive terminal, use `--text` instead.
 Audio input must be an existing mono 16 kHz PCM16 WAV file; Murmur reads it in memory and uses your configured
 local speech engine. Dictation uses your existing personal dictionary and dictation settings. Agent requests use

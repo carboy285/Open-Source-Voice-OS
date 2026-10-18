@@ -118,10 +118,17 @@ export class McpManager implements ToolHost {
       if (entry.state !== "connected") continue;
       for (const tool of entry.tools) {
         const name = `mcp.${server}.${tool.name}`;
-        if (routes.has(name)) throw new Error(`Duplicate MCP tool: ${name}`);
+        // One misbehaving server must not take every tool away: keep the first tool of a name and skip the rest.
+        if (routes.has(name)) continue;
+        let wire: string;
+        try {
+          wire = names.wire(name);
+        } catch {
+          continue;
+        }
         const route = { server, tool: tool.name, entry };
         routes.set(name, route);
-        routes.set(names.wire(name), route);
+        routes.set(wire, route);
         specs.push({
           name,
           description: `[${server}] ${tool.description ?? tool.name}`,

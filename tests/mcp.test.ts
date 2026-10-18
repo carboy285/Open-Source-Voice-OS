@@ -180,6 +180,25 @@ describe("McpManager", () => {
     }
   });
 
+  it("keeps every other tool when a server lists the same tool twice", async () => {
+    const manager = new McpManager({
+      secrets: new MemorySecretStore(),
+      factory: async () =>
+        fakeConnection([
+          { name: "search", inputSchema: {}, annotations: { readOnlyHint: true } },
+          { name: "search", inputSchema: {}, annotations: { readOnlyHint: true } },
+          { name: "other", inputSchema: {}, annotations: { readOnlyHint: true } },
+        ]),
+    });
+    try {
+      await manager.start({ servers: { dup: { command: "x", args: [], env: {}, enabled: true } } });
+      expect((await manager.list()).map((t) => t.name)).toEqual(["mcp.dup.search", "mcp.dup.other"]);
+      expect(await manager.call("mcp.dup.other", {})).toContain("other");
+    } finally {
+      await manager.close();
+    }
+  });
+
   it("follows existing tool pagination and keeps the routes cached", async () => {
     const connection = fakeConnection([]);
     const list = vi.spyOn(Client.prototype, "listTools").mockImplementation(async (params) => {
