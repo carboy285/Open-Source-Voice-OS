@@ -32,6 +32,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     @Published var sttReady = false
     @Published var panelVisible = false
     @Published var notice: String?
+    @Published var apiKeySaved = Keychain.exists("llm/apiKey")
+    @Published var apiKeyError: String?
     @Published var micStatus = Permissions.microphone
     @Published var axStatus = Permissions.accessibility
     @Published var screenStatus = Permissions.screenRecording
@@ -59,7 +61,12 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         hotkey.onDown = { [weak self] action in self?.hotkeyDown(action) }
         hotkey.onUp = { [weak self] in self?.hotkeyUp() }
         hotkey.onEscape = { [weak self] in self?.cancelListening() }
-        if !hotkey.start() { state = .idle }
+        // Creating the event tap without permission files a TCC request on every launch, so check first.
+        if Permissions.accessibility == .granted {
+            if !hotkey.start() { state = .idle }
+        } else {
+            startPermissionPolling()
+        }
         if Bundle.main.bundleIdentifier != nil {
             let center = UNUserNotificationCenter.current()
             center.delegate = self
@@ -105,8 +112,11 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             }
         }
         core.handle("secret.set") { params, reply in
-            let ok = Keychain.set(params["key"] as? String ?? "", params["value"] as? String ?? "")
-            reply(ok ? .success(["ok": true]) : .failure(CoreError.remote(code: -1, message: "Keychain write failed")))
+            switch Keychain.save(params["key"] as? String ?? "", params["value"] as? String ?? "") {
+            case .success: reply(.success(["ok": true]))
+            case let .failure(error):
+                reply(.failure(CoreError.remote(code: -1, message: "Keychain write failed: \(error.localizedDescription)")))
+            }
         }
         core.handle("secret.delete") { params, reply in
             Keychain.delete(params["key"] as? String ?? "")
@@ -366,11 +376,19 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
     }
 
-    func setSetting(_ key: String, _ value: Any, then: ((JSONObject) -> Void)? = nil) {
+    func setSetting(
+        _ key: String, _ value: Any, then: ((JSONObject) -> Void)? = nil, failed: ((String) -> Void)? = nil
+    ) {
         settings[key] = value
         if key == "dictation.toggleMode" { hotkey.toggleMode = value as? Bool ?? false }
         core.request("settings.set", ["key": key, "value": value]) { [weak self] result in
-            if case let .success(reply) = result, let object = reply as? JSONObject { then?(object) }
+            switch result {
+            case let .success(reply):
+                if let object = reply as? JSONObject { then?(object) }
+            case let .failure(error):
+                NSLog("Murmur: saving setting %@ failed: %@", key, error.localizedDescription)
+                failed?(error.localizedDescription)
+            }
             self?.core.request("status") { status in
                 if case let .success(info) = status, let info = info as? JSONObject {
                     self?.llmReady = info["llm"] as? Bool ?? false
@@ -428,8 +446,26 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     }
 
     func saveApiKey(_ key: String) {
-        if key.isEmpty { Keychain.delete("llm/apiKey") } else { Keychain.set("llm/apiKey", key) }
+        apiKeyError = nil
+        if key.isEmpty {
+            Keychain.delete("llm/apiKey")
+        } else if case let .failure(error) = Keychain.save("llm/apiKey", key) {
+            apiKeyError = L("settings.llm.key_failed", ["error": error.localizedDescription])
+        }
+        apiKeySaved = Keychain.exists("llm/apiKey")
         setSetting("llm.provider", settings["llm.provider"] ?? "anthropic")
+    }
+
+    /// Saves a file path setting and reads it back from the core, so a lost write shows up in the UI.
+    func savePath(_ key: String, _ path: String, failed: @escaping (String) -> Void) {
+        setSetting(key, path, then: { [weak self] _ in
+            self?.core.request("settings.get", ["key": key]) { result in
+                guard case let .success(value) = result else { return }
+                if (value as? JSONObject)?["value"] as? String != path {
+                    failed(L("settings.save_lost"))
+                }
+            }
+        }, failed: { message in failed(L("settings.save_failed", ["error": message])) })
     }
 
     func setLaunchAtLogin(_ on: Bool) {
@@ -461,11 +497,15 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             self.micStatus = Permissions.microphone
             self.axStatus = Permissions.accessibility
             self.screenStatus = Permissions.screenRecording
-            if self.axStatus == .granted, !self.hotkey.isRunning { self.hotkey.start() }
+            if self.axStatus == .granted, !self.hotkey.isRunning, self.hotkey.start(), !self.windows.onboardingVisible {
+                self.stopPermissionPolling()
+            }
         }
     }
 
+    /// Stops polling, unless the hotkey is still waiting for permission. Polling only reads status and never prompts.
     func stopPermissionPolling() {
+        guard hotkey.isRunning else { return }
         permissionTimer?.invalidate()
         permissionTimer = nil
     }

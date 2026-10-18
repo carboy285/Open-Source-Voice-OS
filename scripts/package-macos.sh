@@ -72,6 +72,33 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 
+# An asset catalog (Assets.car) as well: CoreUI looks for one under the bundle id and logs a fault when it's missing.
+XCASSETS="$WORK/Assets.xcassets"
+APPICONSET="$XCASSETS/AppIcon.appiconset"
+mkdir -p "$APPICONSET"
+printf '{"info":{"version":1,"author":"murmur"}}\n' > "$XCASSETS/Contents.json"
+{
+  printf '{"images":['
+  sep=""
+  for size in 16 32 128 256 512; do
+    for scale in 1 2; do
+      file="icon_${size}x${size}.png"
+      [ "$scale" = 2 ] && file="icon_${size}x${size}@2x.png"
+      cp "$ICONSET/$file" "$APPICONSET/$file"
+      printf '%s{"idiom":"mac","size":"%sx%s","scale":"%sx","filename":"%s"}' "$sep" "$size" "$size" "$scale" "$file"
+      sep=","
+    done
+  done
+  printf '],"info":{"version":1,"author":"murmur"}}\n'
+} > "$APPICONSET/Contents.json"
+if xcrun actool "$XCASSETS" --compile "$APP/Contents/Resources" --platform macosx \
+  --minimum-deployment-target 13.0 --app-icon AppIcon --output-partial-info-plist "$WORK/assets-info.plist" >/dev/null; then
+  /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$APP/Contents/Info.plist" 2>/dev/null ||
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIconName AppIcon" "$APP/Contents/Info.plist"
+else
+  echo "warning: actool failed; shipping AppIcon.icns only" >&2
+fi
+
 echo "==> Signing"
 if [ -n "${APPLE_DEVELOPER_ID:-}" ]; then
   codesign --force --options runtime --timestamp --entitlements native/macos/Support/node.entitlements \

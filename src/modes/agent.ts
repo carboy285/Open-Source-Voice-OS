@@ -11,6 +11,7 @@ import type {
 import { systemClock } from "../core/types.js";
 import type { FinalDecision, GateOutcome } from "../gate/gate.js";
 import { genericSummary } from "../gate/preview.js";
+import { describeError } from "../core/redact.js";
 
 export const AGENT_SYSTEM = `You are the agent inside Murmur, a voice tool on the user's computer. The user spoke a request; the transcript may contain recognition errors, so read it for intent.
 
@@ -142,12 +143,8 @@ export async function runAgent(
       });
     } catch (error) {
       if (options.signal?.aborted) return outcome("cancelled", "Task cancelled.", step);
-      return outcome(
-        "failed",
-        "The model request failed.",
-        step,
-        error instanceof Error ? error.message : String(error),
-      );
+      const detail = describeError(error);
+      return outcome("failed", `The model request failed: ${detail}`, step, detail);
     }
     messages.push({ role: "assistant", text: response.text, toolCalls: response.toolCalls, raw: response.raw });
     if (response.toolCalls.length === 0) return outcome("done", response.text.trim(), step);

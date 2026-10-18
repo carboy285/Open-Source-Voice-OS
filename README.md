@@ -5,7 +5,7 @@ Murmur is a voice layer for macOS and Windows: hold a key, speak, and cleaned-up
 ## Requirements
 
 - macOS 13 or later (Apple silicon or Intel), or Windows 10 1809 or later (x64)
-- A speech model for [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (`whisper-cli` plus a `ggml-*.bin` model file). Speech recognition runs on your computer.
+- A speech model for [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (`whisper-cli` plus a `ggml-*.bin` model file). Speech recognition runs on your computer. Tested with whisper.cpp 1.9.5; Murmur finds `whisper-cli` in `/opt/homebrew/bin`, `/usr/local/bin` or PATH.
 - For the agent: an Anthropic API key, or any server with an OpenAI-compatible `/v1/chat/completions` endpoint (a local model server works)
 - To build from source: Node.js 22, plus Xcode 15 or later on macOS, or the .NET 8 SDK on Windows
 

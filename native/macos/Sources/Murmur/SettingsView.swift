@@ -76,15 +76,47 @@ struct DictationSettings: View {
     }
 
     private func pathRow(_ label: String, key: String, directories: Bool) -> some View {
-        HStack {
-            TextField(label, text: text(model, key))
-            Button(L("settings.stt.choose")) {
-                let panel = NSOpenPanel()
-                panel.canChooseFiles = !directories
-                panel.canChooseDirectories = directories
-                if panel.runModal() == .OK, let url = panel.url { model.setSetting(key, url.path) }
+        PathRow(label: label, key: key, directories: directories, startIn: key == "stt.binary" ? "/opt/homebrew/bin" : nil)
+    }
+}
+
+/// A path setting with a picker. Shows an error under the row when the choice could not be saved.
+struct PathRow: View {
+    @EnvironmentObject var model: AppModel
+    let label: String
+    let key: String
+    let directories: Bool
+    let startIn: String?
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            HStack {
+                TextField(label, text: text(model, key))
+                Button(L("settings.stt.choose"), action: choose)
+            }
+            if let error {
+                Text(error).font(.caption).foregroundStyle(.red)
             }
         }
+    }
+
+    private func choose() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = !directories
+        panel.canChooseDirectories = directories
+        panel.allowsMultipleSelection = false
+        // Keep /opt/homebrew/bin/whisper-cli instead of its versioned Cellar target, so upgrades don't break the path.
+        panel.resolvesAliases = false
+        panel.showsHiddenFiles = true
+        if let startIn, FileManager.default.fileExists(atPath: startIn) {
+            panel.directoryURL = URL(fileURLWithPath: startIn, isDirectory: true)
+        }
+        // A menu-bar app is often not active; the panel would open behind other windows.
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        error = nil
+        model.savePath(key, url.path) { message in error = message }
     }
 }
 
@@ -114,7 +146,9 @@ struct AgentSettings: View {
                         apiKey = ""
                     }
                 }
-                if Keychain.get("llm/apiKey") != nil {
+                if let error = model.apiKeyError {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                } else if model.apiKeySaved {
                     Label(L("settings.llm.key_saved"), systemImage: "key.fill").font(.caption).foregroundStyle(.secondary)
                 }
             }

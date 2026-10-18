@@ -54,7 +54,9 @@ async function add(argv: string[], deps: McpCliDeps): Promise<number> {
   const moved = countRefs(config.servers[name]!);
   deps.out(`${previous ? "Updated" : "Added"} MCP server "${name}" (${describe(server)}).`);
   if (moved) deps.out(`Stored ${moved} secret value${moved > 1 ? "s" : ""} in the keychain.`);
-  deps.out("Murmur connects to it the next time it starts.");
+  deps.out(
+    "Run `murmur list mcp` to connect and check it now. The Murmur app picks it up when it restarts, or when you click Retry in Settings › Connectors.",
+  );
   return 0;
 }
 

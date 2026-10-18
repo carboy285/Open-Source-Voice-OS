@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { Message } from "../src/core/types.js";
 import { AnthropicLlm, DEFAULT_ANTHROPIC_MODEL } from "../src/providers/anthropic.js";
 import { OpenAICompatibleLlm } from "../src/providers/openai-compatible.js";
-import { parseWhisperOutput, wav, WhisperCppStt } from "../src/providers/whisper-cpp.js";
+import { BINARY_DIRS, parseWhisperOutput, resolveBinary, wav, WhisperCppStt } from "../src/providers/whisper-cpp.js";
 import { fakeFetch } from "./fakes/connectors.js";
 import { searchFiles } from "./fakes/tools.js";
 
@@ -124,6 +124,48 @@ describe("WhisperCppStt", () => {
     const stt = new WhisperCppStt({ binary: bin, model: "/models/base.bin" });
     const result = await stt.transcribe({ pcm: new Uint8Array(100), sampleRate: 16000 }, { prompt: "Murmur, MCP" });
     expect(result.language).toBe("en");
-    expect(result.text).toBe("got 144 bytes args=-m /models/base.bin -f - -nt -np -l auto --prompt Murmur, MCP");
+    expect(result.text).toBe(
+      "got 144 bytes args=-m /models/base.bin -f - -of murmur -nt -np -l auto --prompt Murmur, MCP",
+    );
   });
+
+  it("reports a whisper that ignored stdin instead of an empty transcript", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "murmur-whisper-"));
+    const bin = join(dir, "silent-whisper");
+    writeFileSync(
+      bin,
+      `#!${process.execPath}\nprocess.stdin.resume();process.stdin.on("end",()=>{process.stderr.write("read_audio_data: read 144 bytes from stdin\\nwarning: '--output-file -' used without any other '--output-*'\\n");});\n`,
+    );
+    chmodSync(bin, 0o755);
+    const stt = new WhisperCppStt({ binary: bin, model: "/models/base.bin" });
+    await expect(stt.transcribe({ pcm: new Uint8Array(100), sampleRate: 16000 })).rejects.toThrow(
+      /silent-whisper printed no transcript/,
+    );
+  });
+
+  it("finds a bare binary name in Homebrew folders before PATH", () => {
+    const present = new Set([`${BINARY_DIRS[0]}/whisper-cli`, "/custom/bin/whisper-cli"]);
+    const exists = (p: string) => present.has(p);
+    expect(resolveBinary("whisper-cli", "/custom/bin", exists)).toBe("/opt/homebrew/bin/whisper-cli");
+    expect(resolveBinary("other", "/custom/bin", (p) => p === "/custom/bin/other")).toBe("/custom/bin/other");
+    expect(resolveBinary("missing", "/custom/bin", exists)).toBe("missing");
+    expect(resolveBinary("/abs/whisper-cli", "", exists)).toBe("/abs/whisper-cli");
+  });
+
+  const realBinary = process.env.MURMUR_TEST_WHISPER;
+  const realModel = process.env.MURMUR_TEST_WHISPER_MODEL;
+  it.skipIf(!realBinary || !realModel)(
+    "reads audio from stdin with a real whisper-cli",
+    async () => {
+      // Set MURMUR_TEST_WHISPER (binary) and MURMUR_TEST_WHISPER_MODEL (ggml file) to run this.
+      // MURMUR_TEST_WHISPER_WAV may point at a 16 kHz mono PCM16 WAV of speech to also check the text.
+      const { readFileSync } = await import("node:fs");
+      const wavPath = process.env.MURMUR_TEST_WHISPER_WAV;
+      const pcm = wavPath ? new Uint8Array(readFileSync(wavPath).subarray(44)) : new Uint8Array(32000);
+      const stt = new WhisperCppStt({ binary: realBinary!, model: realModel!, timeoutMs: 120_000 });
+      const result = await stt.transcribe({ pcm, sampleRate: 16000 }, { language: "en" });
+      if (wavPath) expect(result.text.length).toBeGreaterThan(0);
+    },
+    180_000,
+  );
 });

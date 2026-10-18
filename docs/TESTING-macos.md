@@ -6,7 +6,15 @@ A hands-on checklist for the first real run of the macOS app. Work through it in
 
 Use one of these:
 
-- **CI artifact:** open the latest successful CI run for your branch on GitHub Actions and download the macOS installer artifact. Unzip it to get `Murmur-<version>-macos-universal.dmg`.
+- **CI artifact:** find the run id of the latest successful CI run for the branch, then download its `murmur-macos-dmg` artifact. `gh run download` has no `--branch` flag, so list runs first:
+
+  ```sh
+  gh run list --repo carboy285/Open-Source-Voice-OS --branch claude/open-source-voiceos-alt-h4r7fn --workflow CI --status success --limit 1
+  gh run download <run-id> --repo carboy285/Open-Source-Voice-OS --name murmur-macos-dmg --dir ~/murmur-dmg
+  ```
+
+  The folder then holds `Murmur-<version>-macos-universal.dmg`. You can also download the artifact from the run's page on GitHub Actions and unzip it.
+
 - **From source** (needs Node 22 and Xcode 15+):
   ```sh
   git clone https://github.com/carboy285/open-source-voice-os.git
@@ -44,7 +52,13 @@ curl -L -o ~/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/
 
 ## 3. Dictation
 
-First, in Settings › Dictation, pick `whisper-cli` (`/opt/homebrew/bin/whisper-cli`) and `~/ggml-base.bin`.
+First, in Settings › Dictation, pick `whisper-cli` (`/opt/homebrew/bin/whisper-cli`; the picker opens in that folder) and `~/ggml-base.bin`. The field shows the saved path.
+
+If the whisper-cli choice doesn't stick (the field goes back to `whisper-cli`, or a red message appears under it):
+
+- Type the full path, `/opt/homebrew/bin/whisper-cli`, into the field instead. It saves as you type.
+- Or leave it as `whisper-cli`. Murmur looks in `/opt/homebrew/bin`, `/usr/local/bin` and then PATH, so a Homebrew install is found either way.
+- To check what was saved: `sqlite3 ~/Library/Application\ Support/Murmur/murmur.db "select * from settings where key like 'stt.%'"`. Note any red message in your report.
 
 | #    | Do                                                                                    | Expect                                                                                      |
 | ---- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |

@@ -194,9 +194,14 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
     func showSettings() {
         if settings == nil {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView().environmentObject(model).environmentObject(L)))
-            window.styleMask = [.titled, .closable, .miniaturizable]
-            window.setContentSize(NSSize(width: 620, height: 480))
+            // Size the hosting view before it joins a window; a first layout at zero width logs "width is negative".
+            let rect = NSRect(x: 0, y: 0, width: 620, height: 480)
+            let hosting = NSHostingController(rootView: SettingsView().environmentObject(model).environmentObject(L))
+            hosting.sizingOptions = []
+            hosting.view.frame = rect
+            let window = NSWindow(contentRect: rect, styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
+            window.contentViewController = hosting
+            window.setContentSize(rect.size)
             window.isReleasedWhenClosed = false
             settings = window
         }
@@ -222,6 +227,8 @@ final class WindowManager: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         onboarding?.makeKeyAndOrderFront(nil)
     }
+
+    var onboardingVisible: Bool { onboarding?.isVisible ?? false }
 
     func closeOnboarding() {
         UserDefaults.standard.set(true, forKey: "onboarded")

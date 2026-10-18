@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { accessSync, constants } from "node:fs";
+import { delimiter, join } from "node:path";
 import type { Pcm16Audio, SttProvider, TranscribeOptions, Transcript } from "../core/types.js";
 
 export interface WhisperCppOptions {
@@ -30,15 +32,47 @@ export function wav(audio: Pcm16Audio): Buffer {
   return Buffer.concat([header, Buffer.from(audio.pcm.buffer, audio.pcm.byteOffset, dataLen)]);
 }
 
+/** Folders searched for a bare binary name before PATH. Apps opened from Finder don't get Homebrew on PATH. */
+export const BINARY_DIRS = ["/opt/homebrew/bin", "/usr/local/bin"];
+
+function isExecutable(path: string): boolean {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Resolves a bare name like "whisper-cli" to a full path. A value containing a slash is used as is. */
+export function resolveBinary(
+  name: string,
+  envPath = process.env.PATH ?? "",
+  exists: (path: string) => boolean = isExecutable,
+): string {
+  if (!name || name.includes("/") || name.includes("\\")) return name;
+  const dirs = [...BINARY_DIRS, ...envPath.split(delimiter).filter(Boolean)];
+  for (const dir of dirs) {
+    const candidate = join(dir, name);
+    if (exists(candidate)) return candidate;
+  }
+  return name;
+}
+
+/** whisper-cli builds that treat "-f -" as an output file print this and nothing else. */
+const STDIN_IGNORED = /--output-file -'? used without any other/;
+
 /**
- * Local speech-to-text with whisper.cpp. Audio goes to the process on stdin ("-f -"),
- * so nothing is written to disk.
+ * Local speech-to-text with whisper.cpp. Audio goes to the process on stdin ("-f -"), so nothing is written to disk.
+ * whisper-cli names its output after the input, and an output named "-" switches off the printed transcript
+ * (1.9.5 prints only a warning). "-of" sets a harmless name; no file is written because no --output-* format is asked for.
+ * "/dev/stdin" is not an option: the decoder needs to seek, which a pipe can't do.
  */
 export class WhisperCppStt implements SttProvider {
   constructor(private readonly options: WhisperCppOptions) {}
 
   args(options: TranscribeOptions = {}): string[] {
-    const args = ["-m", this.options.model, "-f", "-", "-nt", "-np", "-l", options.language ?? "auto"];
+    const args = ["-m", this.options.model, "-f", "-", "-of", "murmur", "-nt", "-np", "-l", options.language ?? "auto"];
     if (this.options.threads) args.push("-t", String(this.options.threads));
     if (options.prompt) args.push("--prompt", options.prompt);
     return args;
@@ -47,7 +81,8 @@ export class WhisperCppStt implements SttProvider {
   transcribe(audio: Pcm16Audio, options: TranscribeOptions = {}): Promise<Transcript> {
     if (!this.options.model) return Promise.reject(new Error("Choose a whisper model file in Settings › Speech."));
     return new Promise((resolve, reject) => {
-      const child = spawn(this.options.binary, this.args(options), { stdio: ["pipe", "pipe", "pipe"] });
+      const binary = resolveBinary(this.options.binary);
+      const child = spawn(binary, this.args(options), { stdio: ["pipe", "pipe", "pipe"] });
       let stdout = "";
       let stderr = "";
       const timer = setTimeout(() => {
@@ -58,12 +93,19 @@ export class WhisperCppStt implements SttProvider {
       child.stderr.setEncoding("utf8").on("data", (d: string) => (stderr += d));
       child.on("error", (error) => {
         clearTimeout(timer);
-        reject(new Error(`Could not start ${this.options.binary}: ${error.message}`));
+        const searched = binary === this.options.binary ? ` (looked in ${BINARY_DIRS.join(", ")} and PATH)` : "";
+        reject(new Error(`Could not start ${this.options.binary}${searched}: ${error.message}`));
       });
       child.on("close", (code) => {
         clearTimeout(timer);
         if (code !== 0)
           return reject(new Error(`whisper exited with code ${code}: ${stderr.trim().split("\n").pop() ?? ""}`));
+        if (!stdout.trim() && STDIN_IGNORED.test(stderr))
+          return reject(
+            new Error(
+              `${this.options.binary} printed no transcript: it did not read the audio from stdin. Update whisper.cpp or choose another whisper-cli.`,
+            ),
+          );
         resolve(parseWhisperOutput(stdout, stderr));
       });
       child.stdin.on("error", () => {});
