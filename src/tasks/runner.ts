@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AppContext, Clock, LlmProvider, ToolHost } from "../core/types.js";
+import type { AppContext, Clock, ImageInput, LlmProvider, ToolHost } from "../core/types.js";
 import { systemClock } from "../core/types.js";
 import { ApprovalGate, type ApprovalUi } from "../gate/gate.js";
 import { runAgent, type AgentOutcome } from "../modes/agent.js";
@@ -42,6 +42,7 @@ interface Live {
   controller: AbortController;
   transcript: string;
   context?: AppContext;
+  images?: ImageInput[];
   long: boolean;
   done: Promise<TaskRecord>;
 }
@@ -59,7 +60,11 @@ export class TaskRunner {
     this.clock = options.clock ?? systemClock;
   }
 
-  start(transcript: string, context?: AppContext): { taskId: string; done: Promise<TaskRecord> } {
+  start(
+    transcript: string,
+    context?: AppContext,
+    images?: ImageInput[],
+  ): { taskId: string; done: Promise<TaskRecord> } {
     const id = randomUUID();
     const save = this.options.saveTranscripts?.() ?? false;
     const record: TaskRecord = {
@@ -72,7 +77,7 @@ export class TaskRunner {
       steps: [],
     };
     const controller = new AbortController();
-    const entry = { record, controller, transcript, context, long: false } as Live;
+    const entry = { record, controller, transcript, context, images, long: false } as Live;
     this.live.set(id, entry);
     this.recent.set(id, { transcript, context });
     if (this.recent.size > 50) this.recent.delete(this.recent.keys().next().value!);
@@ -137,6 +142,7 @@ export class TaskRunner {
         clock: this.clock,
         timeZone: this.options.timeZone?.(),
         history: this.options.conversation?.messages(),
+        images: entry.images,
         signal: entry.controller.signal,
         maxSteps: limits.maxSteps,
         maxWallMs: limits.maxWallMs,
@@ -156,7 +162,11 @@ export class TaskRunner {
     }
     clearTimeout(timer);
     if (outcome.status !== "cancelled" && outcome.status !== "failed" && outcome.reply) {
-      this.options.conversation?.add({ request: entry.transcript, reply: outcome.reply, actions: outcome.trace });
+      this.options.conversation?.add({
+        request: entry.images?.length ? `${entry.transcript} (with a picture)` : entry.transcript,
+        reply: outcome.reply,
+        actions: outcome.trace,
+      });
     }
     const status: TaskStatus =
       outcome.status === "done" ? "done" : outcome.status === "cancelled" ? "cancelled" : "failed";

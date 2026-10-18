@@ -15,6 +15,8 @@ type Item = Record<string, unknown>;
 
 /** The model behind a ChatGPT subscription, through the same Responses endpoint Codex uses. */
 export class ChatGptCodexLlm implements LlmProvider {
+  readonly supportsImages = true;
+
   constructor(private readonly options: ChatGptCodexOptions) {}
 
   async complete(request: LlmRequest): Promise<LlmResponse> {
@@ -67,7 +69,17 @@ function toInput(messages: Message[], names: WireNames): Item[] {
   const items: Item[] = [];
   for (const message of messages) {
     if (message.role === "user") {
-      items.push({ type: "message", role: "user", content: [{ type: "input_text", text: message.text }] });
+      items.push({
+        type: "message",
+        role: "user",
+        content: [
+          ...(message.images ?? []).map((image) => ({
+            type: "input_image",
+            image_url: `data:${image.mediaType};base64,${image.data}`,
+          })),
+          { type: "input_text", text: message.text },
+        ],
+      });
     } else if (message.role === "assistant") {
       if (message.text)
         items.push({ type: "message", role: "assistant", content: [{ type: "output_text", text: message.text }] });

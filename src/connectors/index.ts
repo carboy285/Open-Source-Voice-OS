@@ -11,14 +11,16 @@ import { notionConnector } from "./skeletons/notion.js";
 import { slackConnector } from "./skeletons/slack.js";
 import type { Connector } from "./types.js";
 import { webConnector } from "./web.js";
+import { writingConnector, type InsertText } from "./writing.js";
 
 /** Every built-in connector, in catalog order. */
-export function builtinConnectors(reminders: ReminderStore, native?: NativeCall): Connector[] {
+export function builtinConnectors(reminders: ReminderStore, native?: NativeCall, insert?: InsertText): Connector[] {
   return [
     webConnector(),
     filesConnector(),
     obsidianConnector(),
     remindersConnector(reminders),
+    ...(insert ? [writingConnector(insert)] : []),
     gmailConnector(),
     calendarConnector(),
     slackConnector(),

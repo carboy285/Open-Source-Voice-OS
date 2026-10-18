@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS = {
   "agent.maxWallMs": 5 * 60 * 1000,
   "approval.timeoutMs": 10 * 60 * 1000,
   "mcp.callTimeoutMs": 60_000,
-  "connectors.enabled": ["reminders", "files"] as string[],
+  "connectors.enabled": ["reminders", "files", "write"] as string[],
   "connectors.settings": {} as Record<string, Record<string, unknown>>,
   "tts.enabled": true,
   /** Voice identifier from the shell; empty picks a voice that matches the reply's language. */
@@ -34,6 +34,8 @@ export const DEFAULT_SETTINGS = {
   "llm.provider": "none" as "none" | "anthropic" | "openai-compatible" | "chatgpt",
   "llm.model": "",
   "llm.baseUrl": "",
+  /** The OpenAI-compatible model can see images (circle to ask, screen questions). */
+  "llm.vision": false,
   "stt.engine": "parakeet" as "parakeet" | "whisper",
   "stt.parakeetModel": "",
   "stt.parakeetBinary": "parakeet-cli",

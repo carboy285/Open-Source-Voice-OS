@@ -1,6 +1,6 @@
 import type { Readable, Writable } from "node:stream";
 import { MurmurCore, type CapturedContext, type CoreOptions, type ShellBridge } from "../core/app.js";
-import type { Pcm16Audio } from "../core/types.js";
+import type { ImageInput, Pcm16Audio } from "../core/types.js";
 import type { ApprovalResponse, ApprovalUi, FinalDecision } from "../gate/gate.js";
 import type { Preview } from "../gate/preview.js";
 import { catalog, resolveLocale } from "../i18n/index.js";
@@ -75,6 +75,24 @@ export function rpcBridge(peer: JsonRpcPeer): ShellBridge & { approvals: RpcAppr
   };
 }
 
+const MAX_IMAGE_CHARS = 8_000_000;
+
+/** Pictures from the shell: PNG or JPEG, base64, a few at most, and not enormous. Anything else is ignored. */
+function decodeImages(value: unknown): ImageInput[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const images = value
+    .map((item): ImageInput | undefined => {
+      const o = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+      const type = o.mediaType === "image/jpeg" ? "image/jpeg" : o.mediaType === "image/png" ? "image/png" : undefined;
+      return type && typeof o.data === "string" && o.data.length > 0 && o.data.length <= MAX_IMAGE_CHARS
+        ? { mediaType: type, data: o.data }
+        : undefined;
+    })
+    .filter((image): image is ImageInput => image !== undefined)
+    .slice(0, 2);
+  return images.length ? images : undefined;
+}
+
 const str = (v: unknown, name: string): string => {
   if (typeof v !== "string") throw new RpcError(RpcErrors.invalidParams, `${name} must be a string`);
   return v;
@@ -137,6 +155,7 @@ export function registerMethods(peer: JsonRpcPeer, core: MurmurCore, approvals: 
         audio: decodeAudio(p),
         transcript: typeof p.transcript === "string" ? p.transcript : undefined,
         context: p.context && typeof p.context === "object" ? (p.context as CapturedContext) : undefined,
+        images: decodeImages(p.images),
       }),
     )
     .handle("approval.respond", (p) => {

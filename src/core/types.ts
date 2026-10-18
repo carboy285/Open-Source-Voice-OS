@@ -43,6 +43,10 @@ export interface AppContext {
   focusedText?: string;
   /** Legacy single field for on-screen text. */
   screenText?: string;
+  /** The user drew a circle: the text the shell read inside it (empty when there was none). */
+  circledText?: string;
+  /** What the picture attached to the request shows. */
+  picture?: "circle" | "window";
 }
 
 /** Side-effect flags a built-in connector action declares. */
@@ -105,8 +109,15 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+/** A picture sent to a model that can see images. Held in memory only. */
+export interface ImageInput {
+  mediaType: "image/png" | "image/jpeg";
+  /** Base64, without the data: prefix. */
+  data: string;
+}
+
 export type Message =
-  | { role: "user"; text: string }
+  | { role: "user"; text: string; images?: ImageInput[] }
   | {
       role: "assistant";
       text: string;
@@ -131,6 +142,8 @@ export interface LlmResponse {
 }
 
 export interface LlmProvider {
+  /** True when the model accepts pictures. Others get the text read from the picture instead. */
+  readonly supportsImages?: boolean;
   complete(request: LlmRequest): Promise<LlmResponse>;
 }
 

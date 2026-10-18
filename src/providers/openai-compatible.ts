@@ -6,18 +6,25 @@ export interface OpenAICompatibleOptions {
   baseUrl: string;
   model: string;
   apiKey?: string;
+  /** The model behind this server accepts images (a setting; unknown from the outside). */
+  vision?: boolean;
   fetch?: typeof fetch;
 }
 
 interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool";
-  content: string | null;
+  content: string | null | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
   tool_calls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }>;
   tool_call_id?: string;
 }
 
 /** Any server that speaks the chat-completions format: local runtimes or hosted ones, with tool calls. */
 export class OpenAICompatibleLlm implements LlmProvider {
+  /** Set by the user: a server may or may not run a model that sees images. */
+  get supportsImages(): boolean {
+    return this.options.vision === true;
+  }
+
   constructor(private readonly options: OpenAICompatibleOptions) {}
 
   async complete(request: LlmRequest): Promise<LlmResponse> {
@@ -56,7 +63,7 @@ export class OpenAICompatibleLlm implements LlmProvider {
       name: names.unwire(c.function.name),
       input: parseArgs(c.function.arguments),
     }));
-    return { text: message?.content ?? "", toolCalls };
+    return { text: typeof message?.content === "string" ? message.content : "", toolCalls };
   }
 }
 
@@ -71,7 +78,21 @@ function parseArgs(raw: string): Record<string, unknown> {
 
 function toChat(messages: Message[], names: WireNames): ChatMessage[] {
   return messages.flatMap((m): ChatMessage[] => {
-    if (m.role === "user") return [{ role: "user", content: m.text }];
+    if (m.role === "user") {
+      if (!m.images?.length) return [{ role: "user", content: m.text }];
+      return [
+        {
+          role: "user",
+          content: [
+            ...m.images.map((image) => ({
+              type: "image_url" as const,
+              image_url: { url: `data:${image.mediaType};base64,${image.data}` },
+            })),
+            { type: "text" as const, text: m.text },
+          ],
+        },
+      ];
+    }
     if (m.role === "tool") return m.results.map((r) => ({ role: "tool", tool_call_id: r.id, content: r.content }));
     return [
       {

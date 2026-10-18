@@ -38,7 +38,7 @@ import {
 } from "../storage/repos.js";
 import { TaskRunner, type TaskUpdate } from "../tasks/runner.js";
 import { databasePath, mcpConfigPath, modelsDir } from "./paths.js";
-import type { AppContext, Clock, LlmProvider, Pcm16Audio, SttProvider } from "./types.js";
+import type { AppContext, Clock, ImageInput, LlmProvider, Pcm16Audio, SttProvider } from "./types.js";
 import { systemClock } from "./types.js";
 import { isLikelyInvented, isSilent, speechStats } from "../dictation/audio.js";
 import { findModel } from "../models/catalog.js";
@@ -173,7 +173,7 @@ export class MurmurCore {
       settingsFor: (id) => this.settings.get("connectors.settings")[id] ?? {},
     };
     this.registry = new ConnectorRegistry(state, (id) => this.connectorContext(id)).register(
-      ...builtinConnectors(this.reminders, this.options.bridge.native),
+      ...builtinConnectors(this.reminders, this.options.bridge.native, (text) => this.options.bridge.insertText(text)),
     );
     this.composio = new ComposioService({
       secrets: this.secrets,
@@ -302,6 +302,7 @@ export class MurmurCore {
         baseUrl,
         model,
         apiKey: await this.secrets.get(LLM_KEY),
+        vision: this.settings.get("llm.vision"),
         fetch: this.options.fetch,
       });
     }
@@ -544,6 +545,8 @@ export class MurmurCore {
     transcript?: string;
     audio?: Pcm16Audio;
     context?: CapturedContext;
+    /** A picture of what the user circled or is looking at. Dropped when the model can't see images. */
+    images?: ImageInput[];
   }): Promise<{ taskId: string }> {
     const transcript = input.transcript ?? (input.audio ? (await this.transcribe(input.audio)).text : "");
     if (!transcript.trim()) throw new Error(this.t("report.didnt_catch"));
@@ -551,10 +554,17 @@ export class MurmurCore {
       input.context ??
       ((await (this.pendingContext ?? this.options.bridge.captureContext().catch(() => ({})))) as CapturedContext);
     this.pendingContext = undefined;
-    const { taskId } = this.runner.start(transcript, {
-      ...context,
-      kind: categorize(context, this.settings.get("tone.overrides") as Record<string, AppCategory>),
-    });
+    // Only a model that can see gets the picture. The others still get the text read from it (circledText).
+    const images = input.images?.length && (await this.llm())?.supportsImages ? input.images.slice(0, 2) : undefined;
+    const { taskId } = this.runner.start(
+      transcript,
+      {
+        ...context,
+        kind: categorize(context, this.settings.get("tone.overrides") as Record<string, AppCategory>),
+        ...(input.images?.length ? { picture: context.picture ?? "window" } : {}),
+      },
+      images,
+    );
     return { taskId };
   }
 

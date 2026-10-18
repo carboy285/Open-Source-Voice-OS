@@ -14,6 +14,7 @@ export interface AnthropicLlmOptions {
 
 /** Claude through the official SDK, with the user's own key. */
 export class AnthropicLlm implements LlmProvider {
+  readonly supportsImages = true;
   readonly model: string;
   private readonly client: Pick<Anthropic, "messages">;
 
@@ -55,7 +56,19 @@ export class AnthropicLlm implements LlmProvider {
 
 export function toAnthropic(messages: Message[], names: WireNames): Anthropic.MessageParam[] {
   return messages.map((m): Anthropic.MessageParam => {
-    if (m.role === "user") return { role: "user", content: m.text };
+    if (m.role === "user") {
+      if (!m.images?.length) return { role: "user", content: m.text };
+      return {
+        role: "user",
+        content: [
+          ...m.images.map((image) => ({
+            type: "image" as const,
+            source: { type: "base64" as const, media_type: image.mediaType, data: image.data },
+          })),
+          { type: "text" as const, text: m.text },
+        ],
+      };
+    }
     if (m.role === "tool") {
       return {
         role: "user",
