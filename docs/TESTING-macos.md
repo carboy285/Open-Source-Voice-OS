@@ -149,6 +149,7 @@ murmur list mcp
 | 6.3 | Turn on Reduce transparency                                       | Panels and popovers become solid                     |
 | 6.4 | Open the side panel, then close it and reopen it quickly          | It reverses smoothly from where it was, with no jump |
 | 6.5 | Turn on VoiceOver, tab through the approval card                  | Every control is labeled and reachable by keyboard   |
+| 6.6 | Open Settings (also try with the language set to Japanese)        | All six tabs show in the tab bar, with no ">>" menu  |
 
 ## 7. Privacy
 

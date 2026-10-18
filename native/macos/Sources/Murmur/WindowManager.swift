@@ -87,7 +87,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     func showSettings() {
         if settings == nil {
             // Size the hosting view before it joins a window; a first layout at zero width logs "width is negative".
-            let rect = NSRect(x: 0, y: 0, width: 620, height: 480)
+            let rect = NSRect(x: 0, y: 0, width: SettingsLayout.width, height: SettingsLayout.height)
             let hosting = NSHostingController(rootView: SettingsView().environmentObject(model).environmentObject(L))
             hosting.sizingOptions = []
             hosting.view.frame = rect

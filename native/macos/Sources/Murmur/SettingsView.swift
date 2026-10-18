@@ -1,6 +1,13 @@
 import AppKit
 import SwiftUI
 
+/// The Settings window size. Six tabs need about 700 pt for the tab bar to show them all; narrower and macOS folds
+/// the last ones into a ">>" menu.
+enum SettingsLayout {
+    static let width: CGFloat = 800
+    static let height: CGFloat = 480
+}
+
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var strings: Strings
@@ -15,7 +22,7 @@ struct SettingsView: View {
             PrivacySettings().tabItem { Label(L("settings.tab.privacy"), systemImage: "hand.raised") }
         }
         .padding(Space.l)
-        .frame(width: 620, height: 480)
+        .frame(width: SettingsLayout.width, height: SettingsLayout.height)
     }
 }
 
