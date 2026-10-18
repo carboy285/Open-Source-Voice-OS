@@ -45,6 +45,21 @@ final class Strings: ObservableObject {
         "notch.show_all": "Show all",
         "notch.show_less": "Show less",
         "notch.close": "Close",
+        "update.check": "Check for Updates…",
+        "update.checking": "Checking for updates…",
+        "update.up_to_date": "Murmur is up to date",
+        "update.available": "Murmur {version} is available",
+        "update.install": "Install Murmur {version} and Restart",
+        "update.downloading": "Downloading Murmur {version}…",
+        "update.installing": "Installing Murmur {version}…",
+        "update.failed": "Update failed: {error}",
+        "update.manual": "Murmur can't replace itself in this folder. The disk image is open: drag Murmur to Applications.",
+        "update.no_asset": "The latest release has no macOS disk image.",
+        "update.err.no_checksum": "The release has no checksum for its disk image, so it wasn't installed.",
+        "update.err.checksum": "The download didn't match its checksum, so it wasn't installed.",
+        "update.err.bundle": "The downloaded app failed a check ({why}), so it wasn't installed.",
+        "update.notify_body": "Choose Install in the Murmur menu to update.",
+        "settings.version": "Version {version}",
     ]
 }
 

@@ -48,6 +48,7 @@ struct GeneralSettings: View {
                 get: { UserDefaults.standard.object(forKey: "autoUpdate") as? Bool ?? true },
                 set: { UserDefaults.standard.set($0, forKey: "autoUpdate") }
             ))
+            UpdateSettingsSection(updater: model.updater)
             Section {
                 LabeledContent(L("settings.hotkey.dictate"), value: model.hotkeyName)
                 LabeledContent(L("settings.hotkey.agent"), value: "\(model.hotkeyName) + Shift")

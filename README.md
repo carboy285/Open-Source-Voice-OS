@@ -18,6 +18,12 @@ Download the latest installer from the [Releases page](https://github.com/carboy
 
 Both installers include the Murmur engine and its Node.js runtime, so you don't need Node installed.
 
+### Updates
+
+On macOS, Murmur checks for a new release shortly after launch and every 6 hours. When one is out, the menu shows "Install Murmur x.y.z and Restart": Murmur downloads the disk image, checks it against the release's SHA-256 checksum, replaces itself and reopens. You can turn automatic checks off in Settings › General and still check by hand. On Windows, download the new installer from the Releases page.
+
+To publish a release, set the version in `package.json`, commit, and push a matching tag (`git tag v0.2.1 && git push origin v0.2.1`). The release workflow builds both installers, writes `SHA256SUMS.txt` and creates the GitHub Release.
+
 ### Unsigned builds
 
 Release builds are signed only when the project's signing certificates are configured. Builds from CI artifacts or from your own machine are unsigned.

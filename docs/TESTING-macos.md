@@ -81,6 +81,7 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 | #    | Do                                                                       | Expect                                                                                                                                   |
 | ---- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | 4.1  | Hold Right Option + Shift, say "remind me to stretch in two minutes"     | An approval card hangs from the notch with the reminder and its time, with Edit, Cancel and Save                                         |
+| 4.1b | Hold Right Option first, then add Shift, and speak                       | Agent mode: the notch switches to Ask while you hold. Letting go of Shift before Right Option keeps agent mode                           |
 | 4.2  | Press Cancel                                                             | Nothing is created; the reply says you cancelled                                                                                         |
 | 4.3  | Repeat, press Edit, change the text, Save, then approve                  | The preview shows your edited text before you approve; the reminder uses it                                                              |
 | 4.4  | Wait two minutes                                                         | A notification fires with Snooze and Done                                                                                                |
@@ -147,6 +148,15 @@ Use the left Option key for ⌃⌥A: Right Option is the dictation hotkey.
 | 8.17 | Turn on Increase contrast                                                                                  | Cards get a thin light border                                                                                                                     |
 | 8.18 | Turn on VoiceOver, then dictate and trigger an approval                                                    | VoiceOver says "Listening", then "Approval needed: …". Every button on the card has a label                                                       |
 | 8.19 | Unplug the external display while a surface shows                                                          | It moves to the remaining screen's notch or pill                                                                                                  |
+
+## 9. Updates
+
+| #   | Do                                                                                    | Expect                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 9.1 | Settings › General                                                                    | Shows "Version 0.2.0" and a Check for Updates button                                                                         |
+| 9.2 | Click Check for Updates with no newer release published                               | "Murmur is up to date"                                                                                                       |
+| 9.3 | After a newer release is published, wait up to a minute after launch (or click Check) | A notification and a menu item "Install Murmur x.y.z and Restart"                                                            |
+| 9.4 | Choose Install                                                                        | "Downloading…", then Murmur quits and reopens as the new version. macOS may ask for Accessibility and Input Monitoring again |
 
 ## Reporting
 

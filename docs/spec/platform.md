@@ -54,4 +54,8 @@ The app works with only the microphone; missing permissions degrade features wit
 
 ## Updates (D)
 
-Signed releases on GitHub. The shells check the GitHub releases feed (macOS: Sparkle; Windows: a simple feed check that opens the download page). Auto-update can be turned off.
+Releases are published on GitHub with a `SHA256SUMS.txt` listing every installer.
+
+- macOS: Murmur checks the latest release 20 s after launch and every 6 h (setting, on by default). A newer version shows in the menu and Settings, with a one-time notification. "Install and Restart" downloads the `-macos-universal.dmg`, verifies it against `SHA256SUMS.txt`, mounts it, checks the app's bundle id, version and code signature, replaces the installed app and relaunches. Without a checksum, or when the app's folder isn't writable, it doesn't install: in the second case it opens the disk image for a manual drag.
+- Windows: not yet; download the new installer from the release page.
+- Ad-hoc signed builds change code identity on every release, so macOS asks for Accessibility and Input Monitoring again after an update. A Developer ID signature avoids this.

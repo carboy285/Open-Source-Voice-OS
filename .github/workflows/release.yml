@@ -16,6 +16,14 @@ jobs:
       HAS_APPLE_CERT: ${{ secrets.APPLE_CERT_P12 != '' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          want="v$(node -p 'require("./package.json").version')"
+          if [ "$GITHUB_REF_NAME" != "$want" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version ($want). The app would report the wrong version and the updater would loop."
+            exit 1
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -88,6 +96,11 @@ jobs:
         with:
           path: dist-installers
           merge-multiple: true
+      - name: Write checksums (the in-app updater refuses a download without one)
+        run: |
+          cd dist-installers
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
       - name: Create the release with both installers
         env:
           GH_TOKEN: ${{ github.token }}

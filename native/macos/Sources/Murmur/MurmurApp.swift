@@ -65,6 +65,7 @@ struct MenuContent: View {
             Button(L("onboarding.title")) { model.windows.showOnboarding() }
         }
         Divider()
+        UpdateMenuItems(updater: model.updater)
         Button(L("menu.quit")) { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }

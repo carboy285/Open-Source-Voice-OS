@@ -185,5 +185,20 @@
   "menu.recent.words.one": "1 語",
   "menu.recent.words.other": "{count} 語",
   "settings.connectors.connect": "接続",
-  "settings.connectors.client_id_missing": "先にこの連携の OAuth クライアント ID を入力してください。"
+  "settings.connectors.client_id_missing": "先にこの連携の OAuth クライアント ID を入力してください。",
+  "update.check": "アップデートを確認…",
+  "update.checking": "アップデートを確認しています…",
+  "update.up_to_date": "Murmur は最新です",
+  "update.available": "Murmur {version} が利用できます",
+  "update.install": "Murmur {version} をインストールして再起動",
+  "update.downloading": "Murmur {version} をダウンロードしています…",
+  "update.installing": "Murmur {version} をインストールしています…",
+  "update.failed": "アップデートできませんでした: {error}",
+  "update.manual": "このフォルダでは Murmur を置き換えられません。開いたディスクイメージから Murmur をアプリケーションフォルダへドラッグしてください。",
+  "update.no_asset": "最新のリリースに macOS 用のディスクイメージがありません。",
+  "update.err.no_checksum": "ディスクイメージのチェックサムがリリースにないため、インストールしませんでした。",
+  "update.err.checksum": "ダウンロードしたファイルがチェックサムと一致しないため、インストールしませんでした。",
+  "update.err.bundle": "ダウンロードしたアプリが確認に通らなかったため ({why})、インストールしませんでした。",
+  "update.notify_body": "Murmur メニューの「インストール」から更新できます。",
+  "settings.version": "バージョン {version}"
 }
