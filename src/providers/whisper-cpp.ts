@@ -78,11 +78,34 @@ export class WhisperCppStt implements SttProvider {
     return args;
   }
 
-  transcribe(audio: Pcm16Audio, options: TranscribeOptions = {}): Promise<Transcript> {
-    if (!this.options.model) return Promise.reject(new Error("Choose a whisper model file in Settings › Speech."));
+  /** Whether this whisper-cli accepts -sns (suppress non-speech tokens). Learned on first use. */
+  private suppressNst = true;
+
+  async transcribe(audio: Pcm16Audio, options: TranscribeOptions = {}): Promise<Transcript> {
+    if (!this.options.model) throw new Error("Choose a whisper model file in Settings › Speech.");
+    const input = wav(padded(audio));
+    if (this.suppressNst) {
+      const first = await this.run([...this.args(options), "-sns"], input);
+      if (!UNKNOWN_ARGUMENT.test(first.stderr)) return this.result(first);
+      this.suppressNst = false;
+    }
+    return this.result(await this.run(this.args(options), input));
+  }
+
+  private result({ code, stdout, stderr }: { code: number | null; stdout: string; stderr: string }): Transcript {
+    if (code !== 0) throw new Error(`whisper exited with code ${code}: ${stderr.trim().split("\n").pop() ?? ""}`);
+    if (UNKNOWN_ARGUMENT.test(stderr)) throw new Error(`${this.options.binary}: ${stderr.match(UNKNOWN_ARGUMENT)![0]}`);
+    if (!stdout.trim() && STDIN_IGNORED.test(stderr))
+      throw new Error(
+        `${this.options.binary} printed no transcript: it did not read the audio from stdin. Update whisper.cpp or choose another whisper-cli.`,
+      );
+    return parseWhisperOutput(stdout, stderr);
+  }
+
+  private run(args: string[], input: Buffer): Promise<{ code: number | null; stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
       const binary = resolveBinary(this.options.binary);
-      const child = spawn(binary, this.args(options), { stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn(binary, args, { stdio: ["pipe", "pipe", "pipe"] });
       let stdout = "";
       let stderr = "";
       const timer = setTimeout(() => {
@@ -98,20 +121,25 @@ export class WhisperCppStt implements SttProvider {
       });
       child.on("close", (code) => {
         clearTimeout(timer);
-        if (code !== 0)
-          return reject(new Error(`whisper exited with code ${code}: ${stderr.trim().split("\n").pop() ?? ""}`));
-        if (!stdout.trim() && STDIN_IGNORED.test(stderr))
-          return reject(
-            new Error(
-              `${this.options.binary} printed no transcript: it did not read the audio from stdin. Update whisper.cpp or choose another whisper-cli.`,
-            ),
-          );
-        resolve(parseWhisperOutput(stdout, stderr));
+        resolve({ code, stdout, stderr });
       });
       child.stdin.on("error", () => {});
-      child.stdin.end(wav(audio));
+      child.stdin.end(input);
     });
   }
+}
+
+/** whisper-cli prints this (and exits 0) for flags it doesn't know. */
+const UNKNOWN_ARGUMENT = /unknown argument: \S+/;
+
+/** Silence added before and after the recording; whisper clips the first and last word less with it. */
+export const PAD_MS = 300;
+
+export function padded(audio: Pcm16Audio): Pcm16Audio {
+  const pad = Math.round((audio.sampleRate * PAD_MS) / 1000) * 2;
+  const pcm = new Uint8Array(pad + audio.pcm.byteLength + pad);
+  pcm.set(audio.pcm, pad);
+  return { pcm, sampleRate: audio.sampleRate };
 }
 
 export function parseWhisperOutput(stdout: string, stderr: string): Transcript {

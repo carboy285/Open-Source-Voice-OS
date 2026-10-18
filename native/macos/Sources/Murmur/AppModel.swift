@@ -41,6 +41,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     let core = CoreClient()
     let hotkey = HotkeyMonitor()
     let audio = AudioCapture()
+    let updater = Updater()
     lazy var windows = WindowManager(model: self)
 
     private var pressStarted = Date()
@@ -60,6 +61,14 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         audio.onLevel = { [weak self] value in self?.level = value }
         hotkey.onDown = { [weak self] action in self?.hotkeyDown(action) }
         hotkey.onUp = { [weak self] in self?.hotkeyUp() }
+        updater.onFound = { [weak self] version in
+            self?.postNotification(title: L("update.available", ["version": version]), body: L("update.notify_body"))
+        }
+        updater.startAutomaticChecks()
+        hotkey.onActionChange = { [weak self] action in
+            guard let self, self.state == .listening else { return }
+            self.action = action
+        }
         hotkey.onEscape = { [weak self] in self?.cancelListening() }
         hotkey.onFocusShortcut = { [weak self] in self?.windows.notch.focusApproval() }
         // Creating the event tap without permission files a TCC request on every launch, so check first.
@@ -157,7 +166,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     // MARK: Hotkey
 
     private func hotkeyDown(_ action: HotkeyAction) {
-        guard state != .starting else { return }
+        // A press during the release tail of the previous recording is ignored.
+        guard state != .starting, !audio.isRecording else { return }
         self.action = action
         pressStarted = Date()
         // Setting the state shows the listening surface right away.
@@ -177,14 +187,19 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
 
     private func hotkeyUp() {
         guard state == .listening else { return }
-        let pcm = audio.stop()
         Cue.play(start: false, enabled: soundOn)
         if Date().timeIntervalSince(pressStarted) < 0.3 {
             cancelListening()
             return
         }
-        let audioParams: JSONObject = ["audio": pcm.base64EncodedString(), "sampleRate": 16_000]
         state = .transcribing
+        // Keep recording for a moment after release so the last word isn't clipped.
+        audio.stop(afterTail: { [weak self] pcm in self?.send(pcm) })
+    }
+
+    private func send(_ pcm: Data) {
+        guard state == .transcribing else { return }
+        let audioParams: JSONObject = ["audio": pcm.base64EncodedString(), "sampleRate": 16_000]
         switch action {
         case .dictate:
             core.request("dictation.stop", audioParams, timeout: 60) { [weak self] result in

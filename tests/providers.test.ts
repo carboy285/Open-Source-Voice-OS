@@ -125,7 +125,8 @@ describe("WhisperCppStt", () => {
     const result = await stt.transcribe({ pcm: new Uint8Array(100), sampleRate: 16000 }, { prompt: "Murmur, MCP" });
     expect(result.language).toBe("en");
     expect(result.text).toBe(
-      "got 144 bytes args=-m /models/base.bin -f - -of murmur -nt -np -l auto --prompt Murmur, MCP",
+      // 100 bytes of audio, 300 ms of padding on each side (9600 bytes each) and the 44-byte WAV header.
+      "got 19344 bytes args=-m /models/base.bin -f - -of murmur -nt -np -l auto --prompt Murmur, MCP -sns",
     );
   });
 
@@ -168,4 +169,28 @@ describe("WhisperCppStt", () => {
     },
     180_000,
   );
+});
+
+describe("WhisperCppStt flag fallback", () => {
+  it("drops -sns when this whisper-cli doesn't know it, and remembers", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "murmur-whisper-"));
+    const bin = join(dir, "old-whisper");
+    const log = join(dir, "calls");
+    // Like whisper-cli: an unknown flag prints an error and still exits 0.
+    writeFileSync(
+      bin,
+      `#!${process.execPath}\nconst fs=require("fs");fs.appendFileSync(${JSON.stringify(log)},process.argv.slice(2).join(" ")+"\\n");process.stdin.resume();process.stdin.on("end",()=>{if(process.argv.includes("-sns")){process.stderr.write("error: unknown argument: -sns\\n");}else{process.stdout.write(" hello there\\n");}});\n`,
+    );
+    chmodSync(bin, 0o755);
+    const stt = new WhisperCppStt({ binary: bin, model: "/models/base.bin" });
+    const audio = { pcm: new Uint8Array(100), sampleRate: 16000 };
+    expect((await stt.transcribe(audio)).text).toBe("hello there");
+    expect((await stt.transcribe(audio)).text).toBe("hello there");
+    const { readFileSync } = await import("node:fs");
+    const calls = readFileSync(log, "utf8").trim().split("\n");
+    expect(calls).toHaveLength(3);
+    expect(calls[0]).toContain("-sns");
+    expect(calls[1]).not.toContain("-sns");
+    expect(calls[2]).not.toContain("-sns");
+  });
 });

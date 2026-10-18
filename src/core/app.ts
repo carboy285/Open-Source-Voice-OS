@@ -34,6 +34,7 @@ import { TaskRunner, type TaskUpdate } from "../tasks/runner.js";
 import { databasePath, mcpConfigPath } from "./paths.js";
 import type { AppContext, Clock, LlmProvider, Pcm16Audio, SttProvider } from "./types.js";
 import { systemClock } from "./types.js";
+import { isLikelyInvented, isSilent, speechStats } from "../dictation/audio.js";
 
 export const LLM_KEY = "llm/apiKey";
 
@@ -289,11 +290,15 @@ export class MurmurCore {
     const stt = this.stt();
     if (!stt) throw new StepError("transcribing", this.t("error.no_stt"));
     const languages = this.settings.get("dictation.languages");
+    // Silence makes whisper invent text ("Thank you."), so silent recordings never reach it.
+    const stats = speechStats(audio);
+    if (isSilent(stats)) return { text: "" };
     try {
-      return await stt.transcribe(audio, {
+      const result = await stt.transcribe(audio, {
         prompt: vocabularyHint(this.dictionary.list()) || undefined,
         language: languages.length === 1 ? languages[0] : undefined,
       });
+      return isLikelyInvented(result.text, stats) ? { text: "" } : result;
     } catch (error) {
       throw new StepError("transcribing", (error as Error).message);
     }

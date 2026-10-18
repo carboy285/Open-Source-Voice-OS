@@ -64,7 +64,11 @@ describe("core ↔ shell protocol", () => {
   it("runs dictation: capture on start, insert on stop, report the changes", async () => {
     const { shell, inserted, waitFor, events } = await start();
     await shell.request("dictation.start");
-    const audio = Buffer.alloc(32000).toString("base64");
+    // One second of a 440 Hz tone: silent audio would be stopped before it reaches the STT.
+    const tone = Buffer.alloc(32000);
+    for (let i = 0; i < 16000; i++)
+      tone.writeInt16LE(Math.round(8000 * Math.sin((2 * Math.PI * 440 * i) / 16000)), i * 2);
+    const audio = tone.toString("base64");
     const result = await shell.request<{ text: string; summary: Array<{ category: string; label: string }> }>(
       "dictation.stop",
       {
