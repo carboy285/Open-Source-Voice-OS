@@ -39,7 +39,7 @@ Anything that sends, books or modifies shows a preview first, with **Edit / Canc
 ## Keyboard and placement (U-1, D)
 
 - On macOS the preview appears at the notch (see `notch.md`). It does **not** take keyboard focus when it appears, so typing in the user's app continues undisturbed.
-- The user focuses it by clicking it or with the focus shortcut (default ⌃⌥Space). Once focused: **⌘Return** approves, **Esc** cancels, Tab moves between controls. **Plain Return never approves.**
+- The user focuses it by clicking it or with the focus shortcut (default ⌃⌥A; ⌃⌥Space is taken by macOS input-source switching). Once focused: **⌘Return** approves, **Esc** cancels, Tab moves between controls. **Plain Return never approves.**
 - The screen is not dimmed. A pending preview waits until the user acts or the timeout above cancels it; the notch shows a pending indicator meanwhile.
 
 ## Edge cases

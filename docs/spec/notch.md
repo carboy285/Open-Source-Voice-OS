@@ -36,7 +36,7 @@ When a surface is replaced, it shrinks back into the notch along the path it cam
 ## Keyboard and focus
 
 - No surface takes keyboard focus when it appears. The user's app keeps focus and their typing is never redirected.
-- The approval card becomes focused when clicked, or with the focus shortcut (default ⌃⌥Space). Focused, it accepts: ⌘Return to approve, Esc to cancel, Tab to move between fields and buttons. **Plain Return never approves.** When the card closes, focus returns to the app that had it.
+- The approval card becomes focused when clicked, or with the focus shortcut (default ⌃⌥A; ⌃⌥Space is taken by macOS input-source switching). Focused, it accepts: ⌘Return to approve, Esc to cancel, Tab to move between fields and buttons. **Plain Return never approves.** When the card closes, focus returns to the app that had it.
 - Editing fields (after Edit) needs focus, which the click or shortcut provides.
 
 ## Approval rules specific to the notch

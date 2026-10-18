@@ -38,7 +38,7 @@ final class Strings: ObservableObject {
         "notch.waiting.other": "{count} waiting",
         "notch.waiting.hint": "Approvals are waiting. They show here when the notch is free.",
         "notch.approval_needed": "Approval needed: {summary}",
-        "notch.focus_hint": "Click or press ⌃⌥Space to use the keyboard",
+        "notch.focus_hint": "Click or press ⌃⌥A to use the keyboard",
         "notch.keys_hint": "⌘Return to confirm · Esc to cancel",
         "notch.step": "Step {count}",
         "notch.open_tasks": "Open tasks",

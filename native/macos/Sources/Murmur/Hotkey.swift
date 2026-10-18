@@ -13,10 +13,10 @@ final class HotkeyMonitor {
     var onDown: ((HotkeyAction) -> Void)?
     var onUp: (() -> Void)?
     var onEscape: (() -> Void)?
-    /// The notch focus shortcut, ⌃⌥Space by default (`notch.md`).
+    /// The notch focus shortcut, ⌃⌥A by default (`notch.md`). ⌃⌥Space is avoided: macOS uses it to switch input sources.
     var onFocusShortcut: (() -> Void)?
-    /// kVK_Space, with Control and Option held.
-    var focusKeyCode: Int64 = 49
+    /// kVK_ANSI_A, with Control and Option held.
+    var focusKeyCode: Int64 = 0
     var focusModifiers: CGEventFlags = [.maskControl, .maskAlternate]
 
     private var tap: CFMachPort?

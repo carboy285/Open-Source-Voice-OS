@@ -124,7 +124,7 @@ murmur list mcp
 
 ## 8. Notch
 
-Use the left Option key for ⌃⌥Space: Right Option is the dictation hotkey. If ⌃⌥Space switches your input source instead, turn off that shortcut in System Settings › Keyboard › Keyboard Shortcuts › Input Sources for this test.
+Use the left Option key for ⌃⌥A: Right Option is the dictation hotkey.
 
 | #    | Do                                                                                                         | Expect                                                                                                                                            |
 | ---- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -135,9 +135,9 @@ Use the left Option key for ⌃⌥Space: Right Option is the dictation hotkey. I
 | 8.5  | After an insert with changes, look at the notch                                                            | A short strip lists the first change. Hover it: it expands to the full list and stays open until the pointer leaves. It closes after about 6 s    |
 | 8.6  | In TextEdit, hold Right Option + Shift, say "remind me to stretch in five minutes", let go and keep typing | The card hangs from the notch. TextEdit keeps focus and your typing continues there. The screen is not dimmed                                     |
 | 8.7  | With the card showing, press plain Return in TextEdit                                                      | A new line in TextEdit; nothing is approved                                                                                                       |
-| 8.8  | Press ⌃⌥Space                                                                                              | The card takes focus; its hint changes to "⌘Return to confirm · Esc to cancel"                                                                    |
+| 8.8  | Press ⌃⌥A                                                                                                  | The card takes focus; its hint changes to "⌘Return to confirm · Esc to cancel"                                                                    |
 | 8.9  | Press plain Return, then ⌘Return                                                                           | Return does nothing; ⌘Return approves. Focus goes back to TextEdit                                                                                |
-| 8.10 | Trigger another approval, press ⌃⌥Space, then Esc                                                          | It is cancelled and focus returns to TextEdit. Esc does nothing while the card isn't focused                                                      |
+| 8.10 | Trigger another approval, press ⌃⌥A, then Esc                                                              | It is cancelled and focus returns to TextEdit. Esc does nothing while the card isn't focused                                                      |
 | 8.11 | Trigger an approval, then click outside the card                                                           | The card stays; nothing is cancelled                                                                                                              |
 | 8.12 | Trigger an approval, then dictate while it waits                                                           | Listening takes over the notch and a "1 waiting" badge sits beside it with a slow, faint pulse. After the change report's 6 s, the card returns   |
 | 8.13 | Trigger approvals for two calls in one request                                                             | The badge (or the card's footer) shows the count; they come one after another in order                                                            |

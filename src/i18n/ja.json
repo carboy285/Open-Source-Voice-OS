@@ -86,7 +86,7 @@
   "notch.waiting.other": "{count} 件待機中",
   "notch.waiting.hint": "確認待ちがあります。ノッチが空くとここに表示されます。",
   "notch.approval_needed": "確認が必要です: {summary}",
-  "notch.focus_hint": "クリックするか ⌃⌥Space でキーボード操作",
+  "notch.focus_hint": "クリックするか ⌃⌥A でキーボード操作",
   "notch.keys_hint": "⌘Return で確定 · Esc でキャンセル",
   "notch.step": "ステップ {count}",
   "notch.open_tasks": "タスクを開く",
