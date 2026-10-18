@@ -12,6 +12,8 @@ final class HotkeyMonitor {
     var keyCode: Int64 = 61
     var onDown: ((HotkeyAction) -> Void)?
     var onUp: (() -> Void)?
+    /// Shift or Command pressed after the hotkey went down: the hold switches to agent or edit.
+    var onActionChange: ((HotkeyAction) -> Void)?
     var onEscape: (() -> Void)?
     /// The notch focus shortcut, ⌃⌥A by default (`notch.md`). ⌃⌥Space is avoided: macOS uses it to switch input sources.
     var onFocusShortcut: (() -> Void)?
@@ -22,6 +24,7 @@ final class HotkeyMonitor {
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var isDown = false
+    private var action: HotkeyAction = .dictate
     var toggleMode = false
 
     var isRunning: Bool { tap != nil }
@@ -78,27 +81,47 @@ final class HotkeyMonitor {
             }
             return
         }
-        guard type == .flagsChanged, code == keyCode else { return }
+        guard type == .flagsChanged else { return }
         let flags = event.flags
+        // People hold the hotkey first and add Shift or Command a moment later. The mode is upgraded
+        // while the hold lasts and sticks, so letting go of Shift before the hotkey keeps agent mode.
+        if code != keyCode {
+            if isDown, action == .dictate {
+                let upgraded = Self.action(for: flags)
+                if upgraded != .dictate {
+                    action = upgraded
+                    DispatchQueue.main.async { self.onActionChange?(upgraded) }
+                }
+            }
+            return
+        }
         let pressed = flags.contains(modifierFlag(for: keyCode))
         if pressed {
-            let action: HotkeyAction = flags.contains(.maskShift) ? .agent : flags.contains(.maskCommand) ? .edit : .dictate
+            let action = Self.action(for: flags)
             if toggleMode {
                 if isDown {
                     isDown = false
                     DispatchQueue.main.async { self.onUp?() }
                 } else {
                     isDown = true
+                    self.action = action
                     DispatchQueue.main.async { self.onDown?(action) }
                 }
             } else if !isDown {
                 isDown = true
+                self.action = action
                 DispatchQueue.main.async { self.onDown?(action) }
             }
         } else if isDown, !toggleMode {
             isDown = false
             DispatchQueue.main.async { self.onUp?() }
         }
+    }
+
+    private static func action(for flags: CGEventFlags) -> HotkeyAction {
+        if flags.contains(.maskShift) { return .agent }
+        if flags.contains(.maskCommand) { return .edit }
+        return .dictate
     }
 
     /// Exactly the focus modifiers: Command or Shift held as well means a different shortcut.
