@@ -31,10 +31,13 @@ import {
   TaskRepo,
 } from "../storage/repos.js";
 import { TaskRunner, type TaskUpdate } from "../tasks/runner.js";
-import { databasePath, mcpConfigPath } from "./paths.js";
+import { databasePath, mcpConfigPath, modelsDir } from "./paths.js";
 import type { AppContext, Clock, LlmProvider, Pcm16Audio, SttProvider } from "./types.js";
 import { systemClock } from "./types.js";
 import { isLikelyInvented, isSilent, speechStats } from "../dictation/audio.js";
+import { findModel } from "../models/catalog.js";
+import { ModelManager } from "../models/manager.js";
+import { ParakeetCppStt } from "../providers/parakeet-cpp.js";
 
 export const LLM_KEY = "llm/apiKey";
 
@@ -51,7 +54,9 @@ export type CoreEvent =
   | { type: "dictation.result"; text: string; changes: Change[]; summary: ChangeSummary[]; category: AppCategory }
   | ({ type: "task.update" } & TaskUpdate)
   | { type: "notify"; title: string; body: string; kind: "status" | "completion" | "warning" | "error" }
-  | { type: "reminder.fire"; id: number; text: string; missed: boolean };
+  | { type: "reminder.fire"; id: number; text: string; missed: boolean }
+  | { type: "models.progress"; id: string; received: number; total?: number }
+  | { type: "models.done"; id: string; ok: boolean; error?: string };
 
 export interface ChangeSummary {
   category: ChangeCategory;
@@ -73,6 +78,8 @@ export interface CoreOptions {
   /** Database file; ":memory:" for tests. Defaults to the per-user data directory. */
   databasePath?: string;
   mcpConfigPath?: string;
+  /** Downloaded speech models. Defaults to `models/` in the data directory. */
+  modelsDir?: string;
   env?: NodeJS.ProcessEnv;
   clock?: Clock;
   /** Overrides for tests. */
@@ -93,6 +100,7 @@ export class MurmurCore {
   learner!: CorrectionLearner;
   registry!: ConnectorRegistry;
   mcp: McpManager;
+  models: ModelManager;
   runner!: TaskRunner;
   scheduler!: ReminderScheduler;
   readonly secrets: IndexedSecretStore;
@@ -108,6 +116,7 @@ export class MurmurCore {
     this.clock = options.clock ?? systemClock;
     this.dbPath = options.databasePath ?? databasePath(options.env);
     this.mcpPath = options.mcpConfigPath ?? mcpConfigPath(options.env);
+    this.models = new ModelManager(options.modelsDir ?? modelsDir(options.env), options.fetch);
     this.db = new Database(this.dbPath);
     this.secrets = new IndexedSecretStore(options.bridge.secrets, {
       read: () => this.settings.get("secrets.index"),
@@ -260,11 +269,60 @@ export class MurmurCore {
     return undefined;
   }
 
+  /**
+   * NVIDIA Parakeet when a downloaded model is chosen (the default engine), whisper.cpp when picked in
+   * Settings or when no Parakeet model is installed yet but a whisper model is set.
+   */
   stt(): SttProvider | undefined {
     if (this.options.stt) return this.options.stt;
+    const engine = this.settings.get("stt.engine");
+    if (engine === "parakeet") {
+      const id = this.settings.get("stt.parakeetModel");
+      const path = id ? this.models.path(id) : undefined;
+      if (id && path && this.models.isInstalled(id)) {
+        return new ParakeetCppStt({ binary: this.settings.get("stt.parakeetBinary") || "parakeet-cli", model: path });
+      }
+    }
     const model = this.settings.get("stt.model");
     if (!model) return undefined;
     return new WhisperCppStt({ binary: this.settings.get("stt.binary") || "whisper-cli", model });
+  }
+
+  // Speech models
+
+  /** Starts a download in the background; progress and the result arrive as events. */
+  downloadModel(id: string): void {
+    if (!findModel(id)) throw new Error(`Unknown model: ${id}`);
+    void this.models
+      .download(id, (progress) => this.emit({ type: "models.progress", ...progress }))
+      .then(() => {
+        // The first model you download becomes the one Murmur uses.
+        const current = this.settings.get("stt.parakeetModel");
+        if (!current || !this.models.isInstalled(current)) this.useModel(id);
+        this.emit({ type: "models.done", id, ok: true });
+      })
+      .catch((error: Error) => this.emit({ type: "models.done", id, ok: false, error: error.message }));
+  }
+
+  useModel(id: string): void {
+    if (!this.models.isInstalled(id)) throw new Error("Download this model first.");
+    this.settings.set("stt.parakeetModel", id);
+    this.settings.set("stt.engine", "parakeet");
+  }
+
+  removeModel(id: string): void {
+    this.models.cancel(id);
+    this.models.remove(id);
+    if (this.settings.get("stt.parakeetModel") === id) this.settings.set("stt.parakeetModel", "");
+  }
+
+  modelState() {
+    return {
+      engine: this.settings.get("stt.engine"),
+      active: this.settings.get("stt.parakeetModel"),
+      dir: this.models.dir,
+      models: this.models.list().map((m) => ({ ...m, downloading: this.models.isDownloading(m.id) })),
+    };
   }
 
   async status(): Promise<{ llm: boolean; stt: boolean; locale: Locale }> {

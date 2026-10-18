@@ -8,6 +8,14 @@ The installers also ship third-party software under its own license:
 - Node.js runtime (MIT License), copied unmodified from nodejs.org.
   Its license is installed next to it as NODE-LICENSE.
 - NAudio (MIT License), used by the Windows app for microphone capture.
+- whisper.cpp and ggml (MIT License), built from source into parakeet-cli and
+  whisper-cli inside the macOS app. Its license is installed next to them as
+  WHISPER-CPP-LICENSE.
+
+Speech models are not shipped with Murmur. The app downloads NVIDIA Parakeet
+TDT 0.6B v3 on request from huggingface.co/ggml-org/parakeet-GGUF (a ggml
+conversion by the whisper.cpp project). The model is by NVIDIA and licensed
+under CC BY 4.0: https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
 - npm dependencies bundled into the core (see THIRD-PARTY.txt next to
   murmur-core.mjs): @anthropic-ai/sdk (MIT), @modelcontextprotocol/sdk (MIT),
   zod (MIT) and their dependencies.

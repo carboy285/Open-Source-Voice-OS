@@ -38,6 +38,7 @@ struct OnboardingView: View {
                 request: { Permissions.requestScreenRecording() },
                 pane: "Privacy_ScreenCapture"
             )
+            OnboardingModelRow(store: model.speech)
             HStack {
                 Text(L("menu.hotkey.dictate", ["key": model.hotkeyName])).font(.callout).foregroundStyle(.secondary)
                 Spacer()

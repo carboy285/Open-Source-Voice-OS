@@ -24,12 +24,7 @@ Use one of these:
   scripts/package-macos.sh        # writes build/installers/*.dmg
   ```
 
-You also need a speech model:
-
-```sh
-brew install whisper-cpp
-curl -L -o ~/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
-```
+The speech model is downloaded from inside the app (step 3.0). Homebrew isn't needed: the speech engine ships inside Murmur.app.
 
 ## 1. Install
 
@@ -52,13 +47,9 @@ curl -L -o ~/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/
 
 ## 3. Dictation
 
-First, in Settings › Dictation, pick `whisper-cli` (`/opt/homebrew/bin/whisper-cli`; the picker opens in that folder) and `~/ggml-base.bin`. The field shows the saved path.
+**3.0 Speech model.** In the first-run window (or Settings › Dictation, engine "NVIDIA Parakeet"), click Download on the recommended (Balanced) model. Expect a progress bar, then "In use" and a notification that the model is ready. The file lands in `~/Library/Application Support/Murmur/models/ggml-parakeet-tdt-0.6b-v3-q8_0.bin`. Also try Cancel during a download (nothing is left behind) and Delete.
 
-If the whisper-cli choice doesn't stick (the field goes back to `whisper-cli`, or a red message appears under it):
-
-- Type the full path, `/opt/homebrew/bin/whisper-cli`, into the field instead. It saves as you type.
-- Or leave it as `whisper-cli`. Murmur looks in `/opt/homebrew/bin`, `/usr/local/bin` and then PATH, so a Homebrew install is found either way.
-- To check what was saved: `sqlite3 ~/Library/Application\ Support/Murmur/murmur.db "select * from settings where key like 'stt.%'"`. Note any red message in your report.
+To use whisper.cpp instead (for Japanese), switch the engine in Settings › Dictation and choose `whisper-cli` and a `ggml-*.bin` model; `whisper-cli` ships inside the app, and the picker also accepts a Homebrew one.
 
 | #    | Do                                                                                    | Expect                                                                                      |
 | ---- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |

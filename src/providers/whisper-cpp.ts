@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
-import { accessSync, constants } from "node:fs";
-import { delimiter, join } from "node:path";
 import type { Pcm16Audio, SttProvider, TranscribeOptions, Transcript } from "../core/types.js";
+import { runCli, type CliResult } from "./cli.js";
+
+export { BINARY_DIRS, resolveBinary } from "./cli.js";
 
 export interface WhisperCppOptions {
   /** whisper.cpp CLI binary, e.g. "whisper-cli" or an absolute path. */
@@ -30,33 +30,6 @@ export function wav(audio: Pcm16Audio): Buffer {
   header.write("data", 36);
   header.writeUInt32LE(dataLen, 40);
   return Buffer.concat([header, Buffer.from(audio.pcm.buffer, audio.pcm.byteOffset, dataLen)]);
-}
-
-/** Folders searched for a bare binary name before PATH. Apps opened from Finder don't get Homebrew on PATH. */
-export const BINARY_DIRS = ["/opt/homebrew/bin", "/usr/local/bin"];
-
-function isExecutable(path: string): boolean {
-  try {
-    accessSync(path, constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Resolves a bare name like "whisper-cli" to a full path. A value containing a slash is used as is. */
-export function resolveBinary(
-  name: string,
-  envPath = process.env.PATH ?? "",
-  exists: (path: string) => boolean = isExecutable,
-): string {
-  if (!name || name.includes("/") || name.includes("\\")) return name;
-  const dirs = [...BINARY_DIRS, ...envPath.split(delimiter).filter(Boolean)];
-  for (const dir of dirs) {
-    const candidate = join(dir, name);
-    if (exists(candidate)) return candidate;
-  }
-  return name;
 }
 
 /** whisper-cli builds that treat "-f -" as an output file print this and nothing else. */
@@ -92,7 +65,7 @@ export class WhisperCppStt implements SttProvider {
     return this.result(await this.run(this.args(options), input));
   }
 
-  private result({ code, stdout, stderr }: { code: number | null; stdout: string; stderr: string }): Transcript {
+  private result({ code, stdout, stderr }: CliResult): Transcript {
     if (code !== 0) throw new Error(`whisper exited with code ${code}: ${stderr.trim().split("\n").pop() ?? ""}`);
     if (UNKNOWN_ARGUMENT.test(stderr)) throw new Error(`${this.options.binary}: ${stderr.match(UNKNOWN_ARGUMENT)![0]}`);
     if (!stdout.trim() && STDIN_IGNORED.test(stderr))
@@ -102,30 +75,8 @@ export class WhisperCppStt implements SttProvider {
     return parseWhisperOutput(stdout, stderr);
   }
 
-  private run(args: string[], input: Buffer): Promise<{ code: number | null; stdout: string; stderr: string }> {
-    return new Promise((resolve, reject) => {
-      const binary = resolveBinary(this.options.binary);
-      const child = spawn(binary, args, { stdio: ["pipe", "pipe", "pipe"] });
-      let stdout = "";
-      let stderr = "";
-      const timer = setTimeout(() => {
-        child.kill();
-        reject(new Error("Speech recognition timed out."));
-      }, this.options.timeoutMs ?? 30_000);
-      child.stdout.setEncoding("utf8").on("data", (d: string) => (stdout += d));
-      child.stderr.setEncoding("utf8").on("data", (d: string) => (stderr += d));
-      child.on("error", (error) => {
-        clearTimeout(timer);
-        const searched = binary === this.options.binary ? ` (looked in ${BINARY_DIRS.join(", ")} and PATH)` : "";
-        reject(new Error(`Could not start ${this.options.binary}${searched}: ${error.message}`));
-      });
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        resolve({ code, stdout, stderr });
-      });
-      child.stdin.on("error", () => {});
-      child.stdin.end(input);
-    });
+  private run(args: string[], input: Buffer): Promise<CliResult> {
+    return runCli(this.options.binary, args, input, this.options.timeoutMs ?? 30_000);
   }
 }
 

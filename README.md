@@ -5,7 +5,7 @@ Murmur is a voice layer for macOS and Windows: hold a key, speak, and cleaned-up
 ## Requirements
 
 - macOS 13 or later (Apple silicon or Intel), or Windows 10 1809 or later (x64)
-- A speech model for [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (`whisper-cli` plus a `ggml-*.bin` model file). Speech recognition runs on your computer. Tested with whisper.cpp 1.9.5; Murmur finds `whisper-cli` in `/opt/homebrew/bin`, `/usr/local/bin` or PATH.
+- A speech model, downloaded from inside the app: NVIDIA Parakeet TDT 0.6B v3 (about 680 MB for the recommended size). It's saved in `~/Library/Application Support/Murmur/models` and runs on your Mac through whisper.cpp's `parakeet-cli`, which ships inside Murmur.app. Parakeet covers English and 24 other European languages. For Japanese, switch the engine to whisper.cpp in Settings › Dictation and choose a whisper model file.
 - For the agent: an Anthropic API key, or any server with an OpenAI-compatible `/v1/chat/completions` endpoint (a local model server works)
 - To build from source: Node.js 22, plus Xcode 15 or later on macOS, or the .NET 8 SDK on Windows
 
@@ -62,7 +62,7 @@ dotnet build native/windows/Murmur.sln     # the tray app
 ## Quick start
 
 1. Open Murmur. The first-run window asks for the microphone, and on macOS for Accessibility (to type into apps and to see the hotkey).
-2. In Settings › Dictation, choose the `whisper-cli` program and a model file.
+2. Download the speech model when the first-run window offers it, or later in Settings › Dictation. `murmur models download parakeet-tdt-0.6b-v3-q8_0` does the same from Terminal.
 3. Click into any text field, hold Right Option (macOS) or Right Alt (Windows), speak, and let go. A small card shows what changed: fillers removed, spellings fixed, dictionary words applied.
 4. To use the agent, add a model in Settings › Agent. Then hold the same key with Shift and say something like "remind me to call Ana at 3". Murmur shows a preview with Edit, Cancel and the action button. Nothing runs until you press it.
 5. Hold the key with Command (macOS) or Ctrl (Windows) while text is selected to rewrite the selection by voice.

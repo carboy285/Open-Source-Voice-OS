@@ -155,6 +155,23 @@ export function registerMethods(peer: JsonRpcPeer, core: MurmurCore, approvals: 
       const offerDelete = key === "history.saveTranscripts" && before === true && p.value === false;
       return { ok: true, offerDelete };
     })
+    .handle("models.list", () => core.modelState())
+    .handle("models.download", (p) => {
+      core.downloadModel(str(p.id, "id"));
+      return { started: true };
+    })
+    .handle("models.cancel", (p) => {
+      core.models.cancel(str(p.id, "id"));
+      return { ok: true };
+    })
+    .handle("models.use", (p) => {
+      core.useModel(str(p.id, "id"));
+      return core.modelState();
+    })
+    .handle("models.remove", (p) => {
+      core.removeModel(str(p.id, "id"));
+      return core.modelState();
+    })
     .handle("history.list", (p) => ({ items: core.history.list(typeof p.limit === "number" ? p.limit : 20) }))
     .handle("history.clearTranscripts", () => {
       core.history.clearTranscripts();

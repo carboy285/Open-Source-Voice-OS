@@ -194,3 +194,32 @@ describe("WhisperCppStt flag fallback", () => {
     expect(calls[2]).not.toContain("-sns");
   });
 });
+
+describe("ParakeetCppStt", () => {
+  it("pipes padded audio to parakeet-cli and reads the printed text", async () => {
+    const { ParakeetCppStt } = await import("../src/providers/parakeet-cpp.js");
+    const dir = mkdtempSync(join(tmpdir(), "murmur-parakeet-"));
+    const bin = join(dir, "fake-parakeet");
+    writeFileSync(
+      bin,
+      `#!${process.execPath}\nlet n=0;process.stdin.on("data",d=>n+=d.length);process.stdin.on("end",()=>{process.stderr.write("read_audio_data: read "+n+" bytes from stdin\\n");process.stdout.write("Hello"+" there, "+process.argv.slice(2).join(" ")+"\\n");});\n`,
+    );
+    chmodSync(bin, 0o755);
+    const stt = new ParakeetCppStt({ binary: bin, model: "/models/parakeet.bin" });
+    const result = await stt.transcribe({ pcm: new Uint8Array(100), sampleRate: 16000 });
+    expect(result.text).toBe("Hello there, -m /models/parakeet.bin -np -f -");
+  });
+
+  const realBinary = process.env.MURMUR_TEST_PARAKEET;
+  const realModel = process.env.MURMUR_TEST_PARAKEET_MODEL;
+  it.skipIf(!realBinary || !realModel)(
+    "runs a real parakeet-cli on piped audio",
+    async () => {
+      const { ParakeetCppStt } = await import("../src/providers/parakeet-cpp.js");
+      const stt = new ParakeetCppStt({ binary: realBinary!, model: realModel!, timeoutMs: 120_000 });
+      const result = await stt.transcribe({ pcm: new Uint8Array(32000), sampleRate: 16000 });
+      expect(typeof result.text).toBe("string");
+    },
+    180_000,
+  );
+});

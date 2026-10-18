@@ -39,6 +39,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     @Published var screenStatus = Permissions.screenRecording
 
     let core = CoreClient()
+    lazy var speech = SpeechModelStore(core: core)
     let hotkey = HotkeyMonitor()
     let audio = AudioCapture()
     let updater = Updater()
@@ -65,6 +66,10 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             self?.postNotification(title: L("update.available", ["version": version]), body: L("update.notify_body"))
         }
         updater.startAutomaticChecks()
+        speech.onFinished = { [weak self] info in
+            self?.postNotification(title: L("models.ready", ["name": info.name]), body: L("models.ready_body"))
+        }
+        speech.onChange = { [weak self] in self?.refreshStatus() }
         hotkey.onActionChange = { [weak self] action in
             guard let self, self.state == .listening else { return }
             self.action = action
@@ -145,6 +150,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     private func coreReady() {
         restartDelay = 1
         notice = nil
+        speech.refresh()
         let locale = (UserDefaults.standard.string(forKey: "locale")) ?? "system"
         core.request("i18n.strings", ["locale": locale]) { result in
             if case let .success(value) = result, let object = value as? JSONObject,
@@ -291,6 +297,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         switch method {
         case "core.ready":
             coreReady()
+        case "models.progress", "models.done":
+            speech.handle(method, params)
         case "state":
             guard let raw = params["state"] as? String, let next = ShellState(rawValue: raw) else { return }
             if next == .listening { return }
@@ -424,6 +432,16 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                     self?.llmReady = info["llm"] as? Bool ?? false
                     self?.sttReady = info["stt"] as? Bool ?? false
                 }
+            }
+        }
+    }
+
+    /// Re-reads whether speech and the agent are configured.
+    func refreshStatus() {
+        core.request("status") { [weak self] status in
+            if case let .success(info) = status, let info = info as? JSONObject {
+                self?.llmReady = info["llm"] as? Bool ?? false
+                self?.sttReady = info["stt"] as? Bool ?? false
             }
         }
     }

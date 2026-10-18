@@ -68,7 +68,7 @@ struct DictationSettings: View {
             Toggle(L("settings.toggle_mode"), isOn: flag(model, "dictation.toggleMode"))
             Toggle(L("settings.spoken_punctuation"), isOn: flag(model, "dictation.spokenPunctuation"))
             Toggle(L("settings.learning"), isOn: flag(model, "dictation.learning", default: true))
-            Section {
+            SpeechEngineSection(store: model.speech) {
                 pathRow(L("settings.stt.binary"), key: "stt.binary", directories: false)
                 pathRow(L("settings.stt.model"), key: "stt.model", directories: false)
             }
@@ -78,6 +78,48 @@ struct DictationSettings: View {
 
     private func pathRow(_ label: String, key: String, directories: Bool) -> some View {
         PathRow(label: label, key: key, directories: directories, startIn: key == "stt.binary" ? "/opt/homebrew/bin" : nil)
+    }
+}
+
+/// Engine choice, then NVIDIA models to download (Parakeet) or the whisper.cpp paths.
+struct SpeechEngineSection<WhisperRows: View>: View {
+    @ObservedObject var store: SpeechModelStore
+    @EnvironmentObject var strings: Strings
+    private let whisperRows: () -> WhisperRows
+
+    init(store: SpeechModelStore, @ViewBuilder whisperRows: @escaping () -> WhisperRows) {
+        self.store = store
+        self.whisperRows = whisperRows
+    }
+
+    var body: some View {
+        Section {
+            Picker(L("settings.stt.engine"), selection: Binding(get: { store.engine }, set: { store.setEngine($0) })) {
+                Text(L("settings.stt.engine.parakeet")).tag("parakeet")
+                Text(L("settings.stt.engine.whisper")).tag("whisper")
+            }
+            if store.engine == "parakeet" {
+                if !store.ready {
+                    Text(L("models.none")).font(.callout).foregroundStyle(.orange)
+                }
+                ForEach(store.models) { info in
+                    SpeechModelRow(info: info, store: store)
+                }
+            } else {
+                whisperRows()
+            }
+        } footer: {
+            if store.engine == "parakeet" {
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text(L("models.languages"))
+                    if !store.directory.isEmpty { Text(L("models.location", ["path": store.directory])) }
+                    Text(L("models.attribution"))
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .onAppear { store.refresh() }
     }
 }
 

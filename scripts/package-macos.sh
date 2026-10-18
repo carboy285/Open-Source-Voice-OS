@@ -62,6 +62,11 @@ SHIM
 chmod +x "$APP/Contents/Resources/core/murmur"
 [ -f build/core/murmur-core.mjs.LEGAL.txt ] && cp build/core/murmur-core.mjs.LEGAL.txt "$APP/Contents/Resources/core/THIRD-PARTY.txt"
 
+echo "==> Adding the speech engines (whisper.cpp: parakeet-cli for NVIDIA Parakeet, whisper-cli)"
+scripts/build-speech-cli.sh build/speech-bin
+mkdir -p "$APP/Contents/Resources/core/bin"
+cp build/speech-bin/parakeet-cli build/speech-bin/whisper-cli build/speech-bin/WHISPER-CPP-LICENSE "$APP/Contents/Resources/core/bin/"
+
 echo "==> Making the icon"
 ICONSET="$WORK/AppIcon.iconset"
 mkdir -p "$ICONSET"
@@ -103,12 +108,16 @@ echo "==> Signing"
 if [ -n "${APPLE_DEVELOPER_ID:-}" ]; then
   codesign --force --options runtime --timestamp --entitlements native/macos/Support/node.entitlements \
     --sign "$APPLE_DEVELOPER_ID" "$APP/Contents/Resources/core/node"
+  for tool in "$APP"/Contents/Resources/core/bin/*-cli; do
+    codesign --force --options runtime --timestamp --sign "$APPLE_DEVELOPER_ID" "$tool"
+  done
   codesign --force --options runtime --timestamp --entitlements native/macos/Support/Murmur.entitlements \
     --sign "$APPLE_DEVELOPER_ID" "$APP"
   SIGNED=1
 else
   echo "    APPLE_DEVELOPER_ID is not set: ad-hoc signing (unsigned build)"
   codesign --force --sign - "$APP/Contents/Resources/core/node"
+  for tool in "$APP"/Contents/Resources/core/bin/*-cli; do codesign --force --sign - "$tool"; done
   codesign --force --sign - --entitlements native/macos/Support/Murmur.entitlements "$APP"
   SIGNED=0
 fi

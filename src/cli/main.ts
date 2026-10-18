@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mcpConfigPath } from "../core/paths.js";
+import { databasePath, mcpConfigPath } from "../core/paths.js";
 
 // node:sqlite prints an experimental warning on import; keep stderr clean for the shells.
 const emitWarning = process.emitWarning.bind(process);
@@ -20,6 +20,7 @@ Usage:
   murmur add mcp <name> --url <https-url> [--header KEY=VALUE]...
   murmur list mcp
   murmur remove mcp <name>
+  murmur models [list | download <id> | use <id> | remove <id>]
   murmur version`;
 
 async function main(argv: string[]): Promise<number> {
@@ -29,6 +30,28 @@ async function main(argv: string[]): Promise<number> {
       const { runDaemon } = await import("../rpc/daemon.js");
       await runDaemon();
       return -1;
+    }
+    case "models": {
+      const { runModelsCli } = await import("../models/cli.js");
+      const { ModelManager } = await import("../models/manager.js");
+      const { Database } = await import("../storage/db.js");
+      const { SettingsRepo } = await import("../storage/repos.js");
+      const { modelsDir } = await import("../core/paths.js");
+      const db = new Database(databasePath());
+      const settings = new SettingsRepo(db);
+      try {
+        return await runModelsCli(rest, {
+          manager: new ModelManager(modelsDir()),
+          out: (line) => process.stdout.write(`${line}\n`),
+          getActive: () => settings.get("stt.parakeetModel"),
+          setActive: (id) => {
+            settings.set("stt.parakeetModel", id);
+            if (id) settings.set("stt.engine", "parakeet");
+          },
+        });
+      } finally {
+        db.close();
+      }
     }
     case "add":
     case "list":

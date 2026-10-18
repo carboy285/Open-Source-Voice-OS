@@ -39,6 +39,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Cache the speech engines (whisper.cpp build)
+        uses: actions/cache@v4
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        with:
+          path: build/speech-bin
+          key: speech-bin-${{ runner.os }}-${{ hashFiles('scripts/build-speech-cli.sh') }}
       - name: Build the dmg (unsigned)
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
