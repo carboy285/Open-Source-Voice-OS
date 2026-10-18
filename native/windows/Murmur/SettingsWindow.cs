@@ -100,7 +100,7 @@ namespace Murmur
         private UIElement Agent()
         {
             var provider = app.Settings.Str("llm.provider", "none");
-            var options = new[] { ("none", L.T("settings.llm.none")), ("anthropic", L.T("settings.llm.anthropic")), ("openai-compatible", L.T("settings.llm.openai")) };
+            var options = new[] { ("none", L.T("settings.llm.none")), ("anthropic", L.T("settings.llm.anthropic")), ("openai-compatible", L.T("settings.llm.openai")), ("chatgpt", L.T("settings.llm.chatgpt")) };
             var picker = new ComboBox { Width = 280, HorizontalAlignment = HorizontalAlignment.Left };
             AutomationProperties.SetName(picker, L.T("settings.llm.provider"));
             foreach (var (_, label) in options) picker.Items.Add(label);
@@ -108,7 +108,43 @@ namespace Murmur
             picker.SelectionChanged += (_, _) => { app.SetSetting("llm.provider", options[picker.SelectedIndex].Item1); Rebuild(); };
 
             var column = Ui.Column(8, Ui.Text(L.T("settings.llm.provider"), Theme.Body, FontWeights.SemiBold), picker);
-            if (provider != "none")
+            if (provider == "chatgpt")
+            {
+                var chatModel = Ui.Input(app.Settings.Str("llm.model"), L.T("settings.llm.model"));
+                chatModel.LostFocus += (_, _) => app.SetSetting("llm.model", chatModel.Text);
+                column.Children.Add(Ui.Text(L.T("settings.llm.model"), Theme.Body, FontWeights.SemiBold));
+                column.Children.Add(chatModel);
+                column.Children.Add(Ui.Text(L.T("settings.llm.chatgpt.help"), Theme.Caption, secondary: true));
+                if (app.ChatGptWaiting && app.ChatGptCode.Length > 0)
+                {
+                    column.Children.Add(Ui.Text(L.T("settings.llm.chatgpt.code")));
+                    var code = Ui.Text(app.ChatGptCode, Theme.Subtitle, FontWeights.SemiBold);
+                    code.FontFamily = new System.Windows.Media.FontFamily("Consolas");
+                    AutomationProperties.SetName(code, string.Join(" ", app.ChatGptCode.ToCharArray()));
+                    column.Children.Add(code);
+                    column.Children.Add(Ui.Row(
+                        Ui.Button(L.T("settings.llm.chatgpt.copy"), () => Clipboard.SetText(app.ChatGptCode)),
+                        Ui.Button(L.T("settings.llm.chatgpt.open"), () => app.OpenChatGptPage()),
+                        Ui.Button(L.T("settings.llm.chatgpt.cancel"), () => app.CancelChatGptLogin())));
+                    column.Children.Add(Ui.Text(L.T("settings.llm.chatgpt.waiting"), Theme.Caption, secondary: true));
+                }
+                else if (app.ChatGptSignedIn)
+                {
+                    var who = app.ChatGptEmail.Length > 0 ? L.T("settings.llm.chatgpt.signed_in_as", ("email", app.ChatGptEmail)) : L.T("settings.llm.chatgpt.signed_in");
+                    column.Children.Add(Ui.Row(Ui.Text(who), Ui.Button(L.T("settings.llm.chatgpt.sign_out"), () => app.SignOutChatGpt())));
+                }
+                else
+                {
+                    column.Children.Add(Ui.Button(L.T("settings.llm.chatgpt.sign_in"), () => app.StartChatGptLogin(), prominent: true));
+                }
+                if (app.ChatGptError.Length > 0)
+                {
+                    var failed = Ui.Text(L.T("settings.llm.chatgpt.failed", ("error", app.ChatGptError)), Theme.Caption);
+                    failed.Foreground = Theme.Warning;
+                    column.Children.Add(failed);
+                }
+            }
+            else if (provider != "none")
             {
                 var model = Ui.Input(app.Settings.Str("llm.model"), L.T("settings.llm.model"));
                 model.LostFocus += (_, _) => app.SetSetting("llm.model", model.Text);

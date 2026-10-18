@@ -24,7 +24,7 @@ export const DEFAULT_SETTINGS = {
   "mcp.callTimeoutMs": 60_000,
   "connectors.enabled": ["reminders", "files"] as string[],
   "connectors.settings": {} as Record<string, Record<string, unknown>>,
-  "llm.provider": "none" as "none" | "anthropic" | "openai-compatible",
+  "llm.provider": "none" as "none" | "anthropic" | "openai-compatible" | "chatgpt",
   "llm.model": "",
   "llm.baseUrl": "",
   "stt.engine": "parakeet" as "parakeet" | "whisper",

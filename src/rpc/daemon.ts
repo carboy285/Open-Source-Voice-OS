@@ -155,6 +155,16 @@ export function registerMethods(peer: JsonRpcPeer, core: MurmurCore, approvals: 
       const offerDelete = key === "history.saveTranscripts" && before === true && p.value === false;
       return { ok: true, offerDelete };
     })
+    .handle("chatgpt.login.start", () => core.chatgptLogin())
+    .handle("chatgpt.login.cancel", () => {
+      core.chatgpt.cancel();
+      return { ok: true };
+    })
+    .handle("chatgpt.status", () => core.chatgptStatus())
+    .handle("chatgpt.logout", async () => {
+      await core.chatgptLogout();
+      return { ok: true };
+    })
     .handle("models.list", () => core.modelState())
     .handle("models.download", (p) => {
       core.downloadModel(str(p.id, "id"));

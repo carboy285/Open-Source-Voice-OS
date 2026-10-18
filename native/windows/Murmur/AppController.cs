@@ -40,6 +40,14 @@ namespace Murmur
         private readonly SidePanelWindow panel;
         private readonly Tray tray;
         private SettingsWindow? settingsWindow;
+
+        // ChatGPT sign-in, as the Settings screen shows it.
+        public bool ChatGptSignedIn { get; private set; }
+        public string ChatGptEmail { get; private set; } = "";
+        public string ChatGptCode { get; private set; } = "";
+        public string ChatGptUrl { get; private set; } = "";
+        public bool ChatGptWaiting { get; private set; }
+        public string ChatGptError { get; private set; } = "";
         private OnboardingWindow? onboarding;
         private readonly DispatcherTimer reportTimer = new();
         private DateTime pressStarted;
@@ -330,6 +338,22 @@ namespace Murmur
                 case "notify":
                     tray.Balloon(p.Str("title", "Murmur"), p.Str("body"));
                     break;
+                case "chatgpt.login":
+                    if (p.Str("state") == "done")
+                    {
+                        ChatGptWaiting = false;
+                        ChatGptCode = "";
+                        ChatGptError = "";
+                        _ = RefreshChatGpt();
+                    }
+                    else if (p.Str("state") == "failed")
+                    {
+                        ChatGptWaiting = false;
+                        ChatGptCode = "";
+                        ChatGptError = p.Str("error", "unknown error");
+                        settingsWindow?.Rebuild();
+                    }
+                    break;
                 case "reminder.fire":
                     new ReminderToast(this, p.Int("id"), p.Str("text"), p.Bool("missed")).Present();
                     break;
@@ -467,6 +491,63 @@ namespace Murmur
             catch (CoreException error) { tray.Balloon(L.T("app.name"), error.Message); }
         }
 
+        public async Task RefreshChatGpt()
+        {
+            try
+            {
+                var status = await Core.Request("chatgpt.status");
+                ChatGptSignedIn = status.Bool("signedIn");
+                ChatGptEmail = status.Str("email");
+                await RefreshSettings();
+                var hello = await Core.Request("core.hello", new JsonObject { ["shell"] = "windows" });
+                LlmReady = hello.Bool("llm");
+            }
+            catch (CoreException) { }
+            settingsWindow?.Rebuild();
+        }
+
+        /// Asks the core for a code, shows it, and opens OpenAI's page where it is entered.
+        public async void StartChatGptLogin()
+        {
+            ChatGptError = "";
+            ChatGptWaiting = true;
+            settingsWindow?.Rebuild();
+            try
+            {
+                var started = await Core.Request("chatgpt.login.start");
+                ChatGptCode = started.Str("userCode");
+                ChatGptUrl = started.Str("url");
+                OpenChatGptPage();
+            }
+            catch (CoreException error)
+            {
+                ChatGptWaiting = false;
+                ChatGptError = error.Message;
+            }
+            settingsWindow?.Rebuild();
+        }
+
+        public void OpenChatGptPage()
+        {
+            if (ChatGptUrl.StartsWith("https://", StringComparison.Ordinal))
+                Process.Start(new ProcessStartInfo(ChatGptUrl) { UseShellExecute = true });
+        }
+
+        public void CancelChatGptLogin()
+        {
+            Core.Send("chatgpt.login.cancel");
+            ChatGptWaiting = false;
+            ChatGptCode = "";
+            settingsWindow?.Rebuild();
+        }
+
+        public async void SignOutChatGpt()
+        {
+            try { await Core.Request("chatgpt.logout"); }
+            catch (CoreException) { }
+            await RefreshChatGpt();
+        }
+
         public void SaveApiKey(string key)
         {
             if (key.Length == 0) CredentialStore.Delete("llm/apiKey");
@@ -494,6 +575,7 @@ namespace Murmur
         public void ShowSettings()
         {
             RefreshConnectors(() => settingsWindow?.Rebuild());
+            _ = RefreshChatGpt();
             settingsWindow ??= new SettingsWindow(this);
             settingsWindow.Rebuild();
             settingsWindow.Show();

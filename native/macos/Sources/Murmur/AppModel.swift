@@ -9,6 +9,16 @@ enum ShellState: String {
     var menuKey: String { "menu.state.\(rawValue)" }
 }
 
+/// The ChatGPT sign-in as the Settings screen shows it.
+struct ChatGptState {
+    var signedIn = false
+    var email: String?
+    var code: String?
+    var url: String?
+    var waiting = false
+    var error: String?
+}
+
 /// Owns the core connection, the hotkey, the microphone and every window. Runs on the main thread.
 final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     static let shared = AppModel()
@@ -34,6 +44,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     @Published var notice: String?
     @Published var apiKeySaved = Keychain.exists("llm/apiKey")
     @Published var apiKeyError: String?
+    @Published var chatgpt = ChatGptState()
     @Published var micStatus = Permissions.microphone
     @Published var axStatus = Permissions.accessibility
     @Published var screenStatus = Permissions.screenRecording
@@ -310,6 +321,22 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             coreReady()
         case "models.progress", "models.done":
             speech.handle(method, params)
+        case "chatgpt.login":
+            switch params["state"] as? String {
+            case "done":
+                chatgpt.waiting = false
+                chatgpt.code = nil
+                chatgpt.error = nil
+                refreshChatGpt()
+                refreshSettings()
+                refreshStatus()
+            case "failed":
+                chatgpt.waiting = false
+                chatgpt.code = nil
+                chatgpt.error = params["error"] as? String ?? "unknown error"
+            default:
+                break
+            }
         case "state":
             guard let raw = params["state"] as? String, let next = ShellState(rawValue: raw) else { return }
             // Late events from the previous dictation must not hide the listening notch while the mic is open.
@@ -514,6 +541,51 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
         apiKeySaved = Keychain.exists("llm/apiKey")
         setSetting("llm.provider", settings["llm.provider"] ?? "anthropic")
+    }
+
+    func refreshChatGpt() {
+        core.request("chatgpt.status") { [weak self] result in
+            guard let self, case let .success(value) = result, let info = value as? JSONObject else { return }
+            self.chatgpt.signedIn = info["signedIn"] as? Bool ?? false
+            self.chatgpt.email = info["email"] as? String
+        }
+    }
+
+    /// Asks the core for a code, shows it, and opens OpenAI's page where it is entered.
+    func startChatGptLogin() {
+        chatgpt.error = nil
+        chatgpt.waiting = true
+        core.request("chatgpt.login.start") { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case let .success(value):
+                guard let info = value as? JSONObject else { return }
+                self.chatgpt.code = info["userCode"] as? String
+                self.chatgpt.url = info["url"] as? String
+                self.openChatGptPage()
+            case let .failure(error):
+                self.chatgpt.waiting = false
+                self.chatgpt.error = error.localizedDescription
+            }
+        }
+    }
+
+    func openChatGptPage() {
+        if let text = chatgpt.url, let url = URL(string: text), url.scheme == "https" { NSWorkspace.shared.open(url) }
+    }
+
+    func cancelChatGptLogin() {
+        core.request("chatgpt.login.cancel")
+        chatgpt.waiting = false
+        chatgpt.code = nil
+    }
+
+    func signOutChatGpt() {
+        core.request("chatgpt.logout") { [weak self] _ in
+            self?.refreshChatGpt()
+            self?.refreshSettings()
+            self?.refreshStatus()
+        }
     }
 
     /// Saves a file path setting and reads it back from the core, so a lost write shows up in the UI.

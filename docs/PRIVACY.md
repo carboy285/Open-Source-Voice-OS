@@ -48,3 +48,7 @@ Anonymous diagnostics are off by default. The setting exists, but this version h
 - Turning off Keep transcripts offers to delete the text already saved.
 - Settings › Privacy › Delete all Murmur data removes the database, Murmur's keychain entries and the MCP config. Downloaded speech models hold nothing about you and stay; delete them in Settings › Dictation.
 - Uninstalling the app does not delete the data folder; use Delete all first if you want it gone.
+
+## Signing in with ChatGPT
+
+If you choose "ChatGPT subscription" for the agent, Murmur asks OpenAI for a one-time code, you enter it on OpenAI's page, and Murmur keeps the resulting sign-in in your keychain (macOS Keychain or Windows Credential Manager), the same place an API key goes. Your text then goes to OpenAI under your ChatGPT account, and your plan's usage limits apply. Signing out, or "Delete all data", removes the stored sign-in. Murmur does not read the files of any other app, including the Codex command-line tool.

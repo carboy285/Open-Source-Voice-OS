@@ -92,6 +92,8 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 | 4.9  | Cancel a running task from the side panel                                | It stops before the next step                                                                                                            |
 | 4.10 | Open History in the side panel                                           | Past tasks are listed; the transcript shows "—" unless Keep transcripts is on                                                            |
 
+**4.0 ChatGPT subscription.** In Settings › Agent choose "ChatGPT subscription" and click "Sign in with ChatGPT". Murmur shows a code and opens OpenAI's page. Enter the code there and approve. Expect "Signed in as <your email>" within a few seconds, and no API key needed. Then hold Right Option + Shift and ask for something simple. "Sign out" removes it. The sign-in is stored in your keychain as `llm/chatgpt`; the API key option still works.
+
 ## 5. MCP
 
 ```sh

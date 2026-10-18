@@ -16,6 +16,9 @@ import { McpManager, type ConnectionFactory } from "../mcp/manager.js";
 import { editSelection } from "../modes/edit.js";
 import { processDictation } from "../modes/dictation.js";
 import { AnthropicLlm } from "../providers/anthropic.js";
+import { ChatGptSession } from "../providers/chatgpt-auth.js";
+import { ChatGptCodexLlm } from "../providers/chatgpt-codex.js";
+import { redactSecrets } from "./redact.js";
 import { OpenAICompatibleLlm } from "../providers/openai-compatible.js";
 import { WhisperCppStt } from "../providers/whisper-cpp.js";
 import { ReminderScheduler } from "../reminders/scheduler.js";
@@ -56,7 +59,8 @@ export type CoreEvent =
   | { type: "notify"; title: string; body: string; kind: "status" | "completion" | "warning" | "error" }
   | { type: "reminder.fire"; id: number; text: string; missed: boolean }
   | { type: "models.progress"; id: string; received: number; total?: number }
-  | { type: "models.done"; id: string; ok: boolean; error?: string };
+  | { type: "models.done"; id: string; ok: boolean; error?: string }
+  | { type: "chatgpt.login"; state: "waiting" | "done" | "failed"; error?: string };
 
 export interface ChangeSummary {
   category: ChangeCategory;
@@ -95,6 +99,7 @@ export class MurmurCore {
   settings!: SettingsRepo;
   dictionary!: DictionaryRepo;
   history!: DictationHistoryRepo;
+  chatgpt!: ChatGptSession;
   tasks!: TaskRepo;
   reminders!: ReminderRepo;
   learner!: CorrectionLearner;
@@ -122,6 +127,7 @@ export class MurmurCore {
       read: () => this.settings.get("secrets.index"),
       write: (keys) => this.settings.set("secrets.index", keys),
     });
+    this.chatgpt = new ChatGptSession(this.secrets, options.fetch);
     this.mcp = new McpManager({
       secrets: this.secrets,
       factory: options.mcpFactory,
@@ -256,6 +262,10 @@ export class MurmurCore {
       const apiKey = await this.secrets.get(LLM_KEY);
       return apiKey ? new AnthropicLlm({ apiKey, model }) : undefined;
     }
+    if (provider === "chatgpt") {
+      if (!(await this.chatgpt.status()).signedIn) return undefined;
+      return new ChatGptCodexLlm({ session: this.chatgpt, model, fetch: this.options.fetch });
+    }
     if (provider === "openai-compatible") {
       const baseUrl = this.settings.get("llm.baseUrl");
       if (!baseUrl || !model) return undefined;
@@ -291,6 +301,23 @@ export class MurmurCore {
   // Speech models
 
   /** Starts a download in the background; progress and the result arrive as events. */
+  /** Starts the ChatGPT device-code sign-in. The shell shows the code; progress arrives as `chatgpt.login` events. */
+  chatgptLogin() {
+    return this.chatgpt.startLogin((event) => {
+      if (event.state === "done") this.settings.set("llm.provider", "chatgpt");
+      this.emit({ type: "chatgpt.login", ...event, ...(event.error ? { error: redactSecrets(event.error) } : {}) });
+    });
+  }
+
+  chatgptStatus() {
+    return this.chatgpt.status();
+  }
+
+  async chatgptLogout(): Promise<void> {
+    await this.chatgpt.logout();
+    if (this.settings.get("llm.provider") === "chatgpt") this.settings.set("llm.provider", "none");
+  }
+
   downloadModel(id: string): void {
     if (!findModel(id)) throw new Error(`Unknown model: ${id}`);
     void this.models

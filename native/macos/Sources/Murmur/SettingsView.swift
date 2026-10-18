@@ -177,8 +177,12 @@ struct AgentSettings: View {
                 Text(L("settings.llm.none")).tag("none")
                 Text(L("settings.llm.anthropic")).tag("anthropic")
                 Text(L("settings.llm.openai")).tag("openai-compatible")
+                Text(L("settings.llm.chatgpt")).tag("chatgpt")
             }
-            if provider != "none" {
+            if provider == "chatgpt" {
+                TextField(L("settings.llm.model"), text: text(model, "llm.model"))
+                ChatGptSection()
+            } else if provider != "none" {
                 TextField(L("settings.llm.model"), text: text(model, "llm.model"))
                 if provider == "openai-compatible" {
                     TextField(L("settings.llm.base_url"), text: text(model, "llm.baseUrl"))
@@ -312,5 +316,51 @@ struct PrivacySettings: View {
             Button(L("settings.delete_all.button"), role: .destructive) { model.deleteAllData() }
             Button(L("approval.cancel"), role: .cancel) {}
         }
+    }
+}
+
+/// Sign in with a ChatGPT account: Murmur shows a code, the user enters it on OpenAI's page.
+struct ChatGptSection: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var strings: Strings
+
+    var body: some View {
+        Group {
+            Text(L("settings.llm.chatgpt.help")).font(.caption).foregroundStyle(.secondary)
+            if model.chatgpt.waiting, let code = model.chatgpt.code {
+                VStack(alignment: .leading, spacing: Space.s) {
+                    Text(L("settings.llm.chatgpt.code")).font(.callout)
+                    Text(code)
+                        .font(.system(.title, design: .monospaced).weight(.semibold))
+                        .textSelection(.enabled)
+                        .accessibilityLabel(code.map { String($0) }.joined(separator: " "))
+                    HStack {
+                        Button(L("settings.llm.chatgpt.copy")) {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(code, forType: .string)
+                        }
+                        Button(L("settings.llm.chatgpt.open")) { model.openChatGptPage() }
+                        Button(L("settings.llm.chatgpt.cancel")) { model.cancelChatGptLogin() }
+                    }
+                    Text(L("settings.llm.chatgpt.waiting")).font(.caption).foregroundStyle(.secondary)
+                }
+            } else if model.chatgpt.signedIn {
+                HStack {
+                    Label(
+                        model.chatgpt.email.map { L("settings.llm.chatgpt.signed_in_as", ["email": $0]) } ?? L("settings.llm.chatgpt.signed_in"),
+                        systemImage: "checkmark.seal.fill"
+                    )
+                    Spacer()
+                    Button(L("settings.llm.chatgpt.sign_out")) { model.signOutChatGpt() }
+                }
+            } else {
+                Button(L("settings.llm.chatgpt.sign_in")) { model.startChatGptLogin() }
+                    .disabled(model.chatgpt.waiting)
+            }
+            if let error = model.chatgpt.error {
+                Text(L("settings.llm.chatgpt.failed", ["error": error])).font(.caption).foregroundStyle(.red)
+            }
+        }
+        .onAppear { model.refreshChatGpt() }
     }
 }
