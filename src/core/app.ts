@@ -184,7 +184,10 @@ export class MurmurCore {
       adapters: this.options.agentAdapters ?? [new CodexAdapter(), new ClaudeAdapter(), new OpenCodeAdapter()],
       approvals: this.options.bridge.approvals,
       emit: (event) => this.emit(event),
-      isEnabled: (kind) => this.settings.get("agents.enabled").includes(kind),
+      isEnabled: (kind) => {
+        const enabled: unknown = this.settings.get("agents.enabled");
+        return Array.isArray(enabled) && enabled.includes(kind);
+      },
       clock: this.clock,
       timeoutMs: () => this.settings.get("approval.timeoutMs"),
       recentFolders: {

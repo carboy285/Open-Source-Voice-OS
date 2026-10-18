@@ -63,6 +63,8 @@ class ClaudeSession implements AdapterHandle {
     private readonly sink: AdapterSink,
   ) {
     child.stderr?.on("data", (chunk: Buffer) => (this.stderr = (this.stderr + chunk.toString()).slice(-600)));
+    // Writing to a program that has already quit must not crash Murmur.
+    child.stdin?.on("error", () => {});
     readLines(child, (line) => this.receive(line));
     child.on("error", (error) => sink.fail(`Couldn't start Claude Code: ${error.message}`));
     child.on("close", () => {

@@ -271,7 +271,34 @@ describe("AgentHub rules", () => {
 
     const many = setup("command", ["hang", "hang", "hang", "hang"], 30_000);
     for (let i = 0; i < 4; i++) await many.hub.start({ kind: "codex", folder: many.dir, task: `t${i}` });
-    await expect(many.hub.start({ kind: "codex", folder: many.dir, task: "fifth" })).rejects.toThrow(/Four agents/);
+    await expect(many.hub.start({ kind: "codex", folder: many.dir, task: "fifth" })).rejects.toThrow(
+      /4 agents are already working/,
+    );
+  });
+
+  it("closes a question card when the agent is stopped", async () => {
+    const { hub, ui, dir, settle } = setup("command", ["hang"], 30_000);
+    const session = await hub.start({ kind: "codex", folder: dir, task: "x" });
+    await settle(session, "needs_you");
+    await hub.stop(session.id);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(ui.dismissed.at(-1)?.outcome).toBe("expired");
+  });
+
+  it("makes room by stopping the agent that has been finished the longest", async () => {
+    const { hub, dir, settle } = setup("command", [yes, yes, yes, yes, "hang"], 30_000);
+    const first = await hub.start({ kind: "codex", folder: dir, task: "one" });
+    await settle(first, "idle");
+    const others = [];
+    for (const task of ["two", "three", "four"]) {
+      const next = await hub.start({ kind: "codex", folder: dir, task });
+      await settle(next, "idle");
+      others.push(next);
+    }
+    const fifth = await hub.start({ kind: "codex", folder: dir, task: "five" });
+    expect(fifth.status).not.toBe("failed");
+    expect(first.status).toBe("stopped");
+    expect(others.every((s) => s.status === "idle")).toBe(true);
   });
 
   it("remembers recent folders", async () => {

@@ -45,7 +45,12 @@ export class OpenCodeAdapter implements AgentAdapter {
       env: { ...process.env, OPENCODE_SERVER_PASSWORD: password },
     });
     const session = new OpenCodeSession(child, port, password, options, sink);
-    await session.begin();
+    try {
+      await session.begin();
+    } catch (error) {
+      await session.stop();
+      throw error;
+    }
     return session;
   }
 }

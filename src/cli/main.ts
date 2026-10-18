@@ -32,7 +32,16 @@ async function main(argv: string[]): Promise<number> {
   switch (command) {
     case "daemon": {
       const { runDaemon } = await import("../rpc/daemon.js");
-      await runDaemon();
+      // A stray failure in one task must not take the whole app down with it. It is logged and the core carries on.
+      const report = (error: unknown) =>
+        process.stderr.write(`murmur: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`);
+      process.on("uncaughtException", report);
+      process.on("unhandledRejection", report);
+      const { core } = await runDaemon();
+      // Closing the core also stops any coding agents it started, so none are left running.
+      for (const signal of ["SIGTERM", "SIGHUP"] as const) {
+        process.once(signal, () => void core.close().finally(() => process.exit(0)));
+      }
       return -1;
     }
     case "models": {

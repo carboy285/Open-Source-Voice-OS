@@ -37,7 +37,12 @@ export class CodexAdapter implements AgentAdapter {
       cwd: options.cwd,
       stdio: ["pipe", "pipe", "pipe"],
     });
-    return new CodexSession(child, options, sink).begin();
+    try {
+      return await new CodexSession(child, options, sink).begin();
+    } catch (error) {
+      await terminate(child);
+      throw error;
+    }
   }
 }
 
@@ -57,6 +62,8 @@ class CodexSession implements AdapterHandle {
     private readonly sink: AdapterSink,
   ) {
     child.stderr?.on("data", (chunk: Buffer) => (this.stderr = (this.stderr + chunk.toString()).slice(-600)));
+    // Writing to a program that has already quit must not crash Murmur.
+    child.stdin?.on("error", () => {});
     readLines(child, (line) => this.receive(line));
     child.on("error", (error) => this.sink.fail(`Couldn't start Codex: ${error.message}`));
     child.on("close", () => {

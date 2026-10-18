@@ -251,7 +251,14 @@ async function runOne(
   if (refused.has(signature(call))) {
     return { result: { id: call.id, content: REPEAT_RESULT, isError: true }, approval: "cancelled" };
   }
-  const decision = await gate.review(call, spec, signal);
+  let decision;
+  try {
+    decision = await gate.review(call, spec, signal);
+  } catch (error) {
+    // A broken preview must never run the tool. Tell the model it was not run.
+    const message = error instanceof Error ? error.message : String(error);
+    return { result: { id: call.id, content: `Not run: ${message}`, isError: true }, approval: "error" };
+  }
   if (decision.decision === "cancelled" || decision.decision === "expired") {
     refused.add(signature(call));
     return { result: { id: call.id, content: CANCELLED_RESULT, isError: true }, approval: decision.decision };

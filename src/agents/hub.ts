@@ -52,6 +52,8 @@ export class AgentHub {
   private readonly handles = new Map<string, AdapterHandle>();
   private readonly clock: Clock;
   private asks = 0;
+  /** Cards that are open for each session, so a stopped or failed agent doesn't leave one behind. */
+  private readonly open = new Map<string, Set<AbortController>>();
 
   constructor(private readonly options: HubOptions) {
     this.clock = options.clock ?? systemClock;
@@ -122,8 +124,16 @@ export class AgentHub {
     if (!task) throw new Error("Say what the agent should do.");
     if (task.length > 4000) throw new Error("That task is too long. Keep it under 4,000 characters.");
     const cwd = AgentHub.folder(input.folder);
-    const active = this.list().filter((s) => ACTIVE.has(s.status)).length;
-    if (active >= (this.options.maxActive ?? 4)) throw new Error("Four agents are already running. Stop one first.");
+    const max = this.options.maxActive ?? 4;
+    if (this.list().filter((s) => ACTIVE.has(s.status)).length >= max) {
+      // Finished agents stay open for follow-ups. Make room by closing the one that has been idle longest.
+      const idle = this.list()
+        .filter((s) => s.status === "idle")
+        .at(-1);
+      if (idle) await this.stop(idle.id);
+    }
+    if (this.list().filter((s) => ACTIVE.has(s.status)).length >= max)
+      throw new Error(`${max} agents are already working. Stop one first.`);
 
     const session: AgentSession = {
       id: randomUUID().slice(0, 8),
@@ -163,11 +173,17 @@ export class AgentHub {
     const handle = this.handles.get(id);
     this.handles.delete(id);
     this.update(session, { status: "stopped", text: "Stopped.", finishedAt: this.clock.now() });
+    this.closeCards(id);
     await handle?.stop().catch(() => {});
   }
 
   async close(): Promise<void> {
     await Promise.all([...this.sessions.keys()].filter((id) => this.handles.has(id)).map((id) => this.stop(id)));
+  }
+
+  /** Closes any question card an agent still has open; each one counts as "no". */
+  private closeCards(id: string): void {
+    for (const controller of this.open.get(id) ?? []) controller.abort();
   }
 
   private require(id: string): AgentSession {
@@ -183,6 +199,7 @@ export class AgentHub {
       ?.stop()
       .catch(() => {});
     this.handles.delete(session.id);
+    this.closeCards(session.id);
     this.update(session, { status: "failed", text: clip(message, 200), error: message, finishedAt: this.clock.now() });
     this.options.emit({ type: "notify", title: `${session.label} stopped`, body: clip(message, 200), kind: "error" });
   }
@@ -234,6 +251,9 @@ export class AgentHub {
 
   private async show(session: AgentSession, request: AgentAsk, stage: "review" | "confirm") {
     const controller = new AbortController();
+    const cards = this.open.get(session.id) ?? new Set<AbortController>();
+    cards.add(controller);
+    this.open.set(session.id, cards);
     const timer = setTimeout(() => controller.abort(), this.options.timeoutMs?.() ?? 10 * 60_000);
     const preview = this.preview(session, request, stage);
     let outcome: "approved" | "cancelled" | "expired" = "cancelled";
@@ -247,6 +267,8 @@ export class AgentHub {
       return { decision: "cancel" as const };
     } finally {
       clearTimeout(timer);
+      cards.delete(controller);
+      if (!cards.size) this.open.delete(session.id);
       this.options.approvals.dismiss?.(preview.callId, outcome);
     }
   }
