@@ -16,7 +16,7 @@ export interface TaskUpdate {
 }
 
 export interface TaskRunnerOptions {
-  llm: () => LlmProvider | undefined;
+  llm: () => LlmProvider | undefined | Promise<LlmProvider | undefined>;
   tools: ToolHost;
   approvals: ApprovalUi;
   store?: TaskStore;
@@ -100,7 +100,12 @@ export class TaskRunner {
 
   private async execute(entry: Live): Promise<TaskRecord> {
     const { record } = entry;
-    const llm = this.options.llm();
+    let llm: LlmProvider | undefined;
+    try {
+      llm = await this.options.llm();
+    } catch (error) {
+      return this.finish(entry, "failed", error instanceof Error ? error.message : String(error));
+    }
     if (!llm) return this.finish(entry, "failed", "Agent mode needs a model. Add one in Settings.");
     const limits = this.options.limits?.() ?? {};
     const longAfterMs = this.options.longAfterMs ?? 10_000;

@@ -1,0 +1,473 @@
+import { rmSync } from "node:fs";
+import { builtinConnectors } from "../connectors/index.js";
+import { tokenKey } from "../connectors/oauth.js";
+import { CompositeToolHost, ConnectorRegistry, type RegistryState } from "../connectors/registry.js";
+import type { ConnectorContext } from "../connectors/types.js";
+import { WEB_SEARCH_KEY } from "../connectors/web.js";
+import { summarizeChanges, type Change, type ChangeCategory } from "../dictation/changes.js";
+import { vocabularyHint } from "../dictation/dictionary.js";
+import { CorrectionLearner } from "../dictation/learning.js";
+import { categorize, type AppCategory } from "../dictation/tone.js";
+import type { ApprovalUi } from "../gate/gate.js";
+import { resolveLocale, t, type Locale } from "../i18n/index.js";
+import { forgetSecrets, loadConfig, type McpConfig } from "../mcp/config.js";
+import { McpManager, type ConnectionFactory } from "../mcp/manager.js";
+import { editSelection } from "../modes/edit.js";
+import { processDictation } from "../modes/dictation.js";
+import { AnthropicLlm } from "../providers/anthropic.js";
+import { OpenAICompatibleLlm } from "../providers/openai-compatible.js";
+import { WhisperCppStt } from "../providers/whisper-cpp.js";
+import { ReminderScheduler } from "../reminders/scheduler.js";
+import { localTimeZone } from "../reminders/time.js";
+import { IndexedSecretStore, type SecretStore } from "../secrets/store.js";
+import { Database } from "../storage/db.js";
+import {
+  CorrectionRepo,
+  DictationHistoryRepo,
+  DictionaryRepo,
+  ReminderRepo,
+  SettingsRepo,
+  TaskRepo,
+} from "../storage/repos.js";
+import { TaskRunner, type TaskUpdate } from "../tasks/runner.js";
+import { databasePath, mcpConfigPath } from "./paths.js";
+import type { AppContext, Clock, LlmProvider, Pcm16Audio, SttProvider } from "./types.js";
+import { systemClock } from "./types.js";
+
+export const LLM_KEY = "llm/apiKey";
+
+/** What the shell reports from `context.capture`. */
+export interface CapturedContext extends AppContext {
+  /** The focused field is a password field. */
+  secure?: boolean;
+}
+
+export type DictationState = "idle" | "listening" | "transcribing" | "cleaning" | "inserting" | "done" | "error";
+
+export type CoreEvent =
+  | { type: "state"; state: DictationState; step?: string; message?: string }
+  | { type: "dictation.result"; text: string; changes: Change[]; summary: ChangeSummary[]; category: AppCategory }
+  | ({ type: "task.update" } & TaskUpdate)
+  | { type: "notify"; title: string; body: string; kind: "status" | "completion" | "warning" | "error" }
+  | { type: "reminder.fire"; id: number; text: string; missed: boolean };
+
+export interface ChangeSummary {
+  category: ChangeCategory;
+  count: number;
+  label: string;
+}
+
+/** Everything OS-specific the core asks the shell for. */
+export interface ShellBridge {
+  insertText(text: string): Promise<{ ok: boolean; method: string }>;
+  captureContext(): Promise<CapturedContext>;
+  secrets: SecretStore;
+  approvals: ApprovalUi;
+  emit(event: CoreEvent): void;
+}
+
+export interface CoreOptions {
+  bridge: ShellBridge;
+  /** Database file; ":memory:" for tests. Defaults to the per-user data directory. */
+  databasePath?: string;
+  mcpConfigPath?: string;
+  env?: NodeJS.ProcessEnv;
+  clock?: Clock;
+  /** Overrides for tests. */
+  stt?: SttProvider;
+  llm?: LlmProvider;
+  mcpFactory?: ConnectionFactory;
+  fetch?: typeof fetch;
+}
+
+/** The headless core: pipelines, agent, connectors, MCP, storage and i18n, wired together. */
+export class MurmurCore {
+  db: Database;
+  settings!: SettingsRepo;
+  dictionary!: DictionaryRepo;
+  history!: DictationHistoryRepo;
+  tasks!: TaskRepo;
+  reminders!: ReminderRepo;
+  learner!: CorrectionLearner;
+  registry!: ConnectorRegistry;
+  mcp: McpManager;
+  runner!: TaskRunner;
+  scheduler!: ReminderScheduler;
+  readonly secrets: IndexedSecretStore;
+
+  private readonly clock: Clock;
+  private readonly dbPath: string;
+  private readonly mcpPath: string;
+  private pendingContext?: Promise<CapturedContext>;
+  private dictationStarted = 0;
+  private lastAudio?: Pcm16Audio;
+
+  constructor(private readonly options: CoreOptions) {
+    this.clock = options.clock ?? systemClock;
+    this.dbPath = options.databasePath ?? databasePath(options.env);
+    this.mcpPath = options.mcpConfigPath ?? mcpConfigPath(options.env);
+    this.db = new Database(this.dbPath);
+    this.secrets = new IndexedSecretStore(options.bridge.secrets, {
+      read: () => this.settings.get("secrets.index"),
+      write: (keys) => this.settings.set("secrets.index", keys),
+    });
+    this.mcp = new McpManager({
+      secrets: this.secrets,
+      factory: options.mcpFactory,
+      callTimeoutMs: 60_000,
+    });
+    this.wire();
+  }
+
+  private wire(): void {
+    const now = () => this.clock.now();
+    this.settings = new SettingsRepo(this.db);
+    this.dictionary = new DictionaryRepo(this.db, now);
+    this.history = new DictationHistoryRepo(this.db, this.settings, now);
+    this.tasks = new TaskRepo(this.db);
+    this.reminders = new ReminderRepo(this.db);
+    this.learner = new CorrectionLearner(
+      new CorrectionRepo(this.db),
+      (written) => this.dictionary.findByWritten(written) !== undefined,
+      this.clock,
+    );
+    const state: RegistryState = {
+      isEnabled: (id) => this.settings.get("connectors.enabled").includes(id),
+      setEnabled: (id, on) => {
+        const current = new Set(this.settings.get("connectors.enabled"));
+        if (on) current.add(id);
+        else current.delete(id);
+        this.settings.set("connectors.enabled", [...current]);
+      },
+      settingsFor: (id) => this.settings.get("connectors.settings")[id] ?? {},
+    };
+    this.registry = new ConnectorRegistry(state, (id) => this.connectorContext(id)).register(
+      ...builtinConnectors(this.reminders),
+    );
+    this.runner = new TaskRunner({
+      llm: () => this.llm(),
+      // Proxy so a reloaded MCP manager is picked up without rebuilding the runner.
+      tools: new CompositeToolHost([
+        this.registry,
+        { list: () => this.mcp.list(), call: (name, input) => this.mcp.call(name, input) },
+      ]),
+      approvals: this.options.bridge.approvals,
+      store: this.tasks,
+      clock: this.clock,
+      saveTranscripts: () => this.settings.get("history.saveTranscripts"),
+      limits: () => ({
+        maxSteps: this.settings.get("agent.maxSteps"),
+        maxWallMs: this.settings.get("agent.maxWallMs"),
+        approvalTimeoutMs: this.settings.get("approval.timeoutMs"),
+      }),
+      onUpdate: (update) => this.emit({ type: "task.update", ...update }),
+      notify: (status, reply) =>
+        this.emit({
+          type: "notify",
+          title: this.t(
+            status === "done"
+              ? "notify.task_done"
+              : status === "cancelled"
+                ? "notify.task_cancelled"
+                : "notify.task_failed",
+          ),
+          body: reply,
+          kind: status === "done" ? "completion" : status === "cancelled" ? "status" : "error",
+        }),
+    });
+    this.scheduler = new ReminderScheduler({
+      store: this.reminders,
+      clock: this.clock,
+      onFire: ({ reminder, missed }) => {
+        this.emit({ type: "reminder.fire", id: reminder.id, text: reminder.text, missed });
+        this.emit({
+          type: "notify",
+          title: this.t("notify.reminder"),
+          body: missed ? this.t("notify.reminder.missed", { text: reminder.text }) : reminder.text,
+          kind: "status",
+        });
+      },
+    });
+  }
+
+  async start(): Promise<void> {
+    this.prune();
+    this.scheduler.start();
+    await this.reloadMcp();
+  }
+
+  async reloadMcp(): Promise<McpConfig> {
+    const config = await loadConfig(this.mcpPath).catch(() => ({ servers: {} }));
+    await this.mcp.close();
+    this.mcp = new McpManager({
+      secrets: this.secrets,
+      factory: this.options.mcpFactory,
+      callTimeoutMs: this.settings.get("mcp.callTimeoutMs"),
+    });
+    await this.mcp.start(config);
+    return config;
+  }
+
+  prune(): void {
+    this.history.prune();
+    this.tasks.prune(this.clock.now() - Number(this.settings.get("tasks.retentionDays")) * 86_400_000);
+  }
+
+  get locale(): Locale {
+    return resolveLocale(this.settings.get("ui.locale"));
+  }
+
+  t(key: string, params: Record<string, string | number> = {}): string {
+    return t(key, params, this.locale);
+  }
+
+  private emit(event: CoreEvent): void {
+    this.options.bridge.emit(event);
+  }
+
+  private connectorContext(id: string): ConnectorContext {
+    return {
+      settings: this.settings.get("connectors.settings")[id] ?? {},
+      secrets: this.secrets,
+      fetch: this.options.fetch ?? fetch,
+      clock: this.clock,
+      timeZone: localTimeZone(),
+      locale: this.locale === "ja" ? "ja-JP" : "en-US",
+    };
+  }
+
+  /** The configured model, or undefined when none is set up. */
+  async llm(): Promise<LlmProvider | undefined> {
+    if (this.options.llm) return this.options.llm;
+    const provider = this.settings.get("llm.provider");
+    const model = this.settings.get("llm.model");
+    if (provider === "anthropic") {
+      const apiKey = await this.secrets.get(LLM_KEY);
+      return apiKey ? new AnthropicLlm({ apiKey, model }) : undefined;
+    }
+    if (provider === "openai-compatible") {
+      const baseUrl = this.settings.get("llm.baseUrl");
+      if (!baseUrl || !model) return undefined;
+      return new OpenAICompatibleLlm({
+        baseUrl,
+        model,
+        apiKey: await this.secrets.get(LLM_KEY),
+        fetch: this.options.fetch,
+      });
+    }
+    return undefined;
+  }
+
+  stt(): SttProvider | undefined {
+    if (this.options.stt) return this.options.stt;
+    const model = this.settings.get("stt.model");
+    if (!model) return undefined;
+    return new WhisperCppStt({ binary: this.settings.get("stt.binary") || "whisper-cli", model });
+  }
+
+  async status(): Promise<{ llm: boolean; stt: boolean; locale: Locale }> {
+    return { llm: (await this.llm()) !== undefined, stt: this.stt() !== undefined, locale: this.locale };
+  }
+
+  // Dictation
+
+  /** Hotkey down: capture context now, while the user's app is still focused. */
+  beginDictation(): void {
+    this.dictationStarted = this.clock.now();
+    this.pendingContext = this.options.bridge.captureContext().catch(() => ({}));
+    this.emit({ type: "state", state: "listening" });
+  }
+
+  cancelDictation(): void {
+    this.pendingContext = undefined;
+    this.lastAudio = undefined;
+    this.emit({ type: "state", state: "idle" });
+  }
+
+  private async transcribe(audio: Pcm16Audio): Promise<{ text: string; language?: string }> {
+    const stt = this.stt();
+    if (!stt) throw new StepError("transcribing", this.t("error.no_stt"));
+    const languages = this.settings.get("dictation.languages");
+    try {
+      return await stt.transcribe(audio, {
+        prompt: vocabularyHint(this.dictionary.list()) || undefined,
+        language: languages.length === 1 ? languages[0] : undefined,
+      });
+    } catch (error) {
+      throw new StepError("transcribing", (error as Error).message);
+    }
+  }
+
+  /** Hotkey up: transcribe, clean, insert and report. Audio is kept in memory only for a retry after a failed transcription. */
+  async finishDictation(input: { audio?: Pcm16Audio; transcript?: string }): Promise<DictationOutcome> {
+    const context = (await (this.pendingContext ??
+      this.options.bridge.captureContext().catch(() => ({})))) as CapturedContext;
+    this.pendingContext = undefined;
+    const audio = input.audio ?? this.lastAudio;
+    try {
+      let transcript = input.transcript;
+      let language: string | undefined;
+      if (transcript === undefined) {
+        if (!audio) throw new StepError("transcribing", this.t("report.didnt_catch"));
+        this.lastAudio = audio;
+        this.emit({ type: "state", state: "transcribing" });
+        ({ text: transcript, language } = await this.transcribe(audio));
+      }
+      this.lastAudio = undefined;
+
+      this.emit({ type: "state", state: "cleaning" });
+      const result = await processDictation(transcript, context, {
+        dictionary: this.dictionary.list(),
+        spokenPunctuation: this.settings.get("dictation.spokenPunctuation"),
+        language,
+        polish: await this.llm(),
+        categoryOverrides: this.settings.get("tone.overrides") as Record<string, AppCategory>,
+        toneDisabled: this.settings.get("tone.disabled") as AppCategory[],
+      });
+      this.dictionary.recordUses(result.appliedIds);
+
+      if (!result.text) {
+        this.emit({ type: "state", state: "done", message: this.t("report.didnt_catch") });
+        return { text: "", changes: [], summary: [], category: result.category, empty: true };
+      }
+      if (context.secure) {
+        this.emit({ type: "notify", title: this.t("app.name"), body: this.t("report.secure_field"), kind: "warning" });
+        this.emit({ type: "state", state: "idle" });
+        return { text: "", changes: [], summary: [], category: result.category, refused: "secure" };
+      }
+
+      this.emit({ type: "state", state: "inserting" });
+      const inserted = await this.options.bridge.insertText(result.text).catch(() => ({ ok: false, method: "none" }));
+      if (!inserted.ok) {
+        this.emit({ type: "notify", title: this.t("app.name"), body: this.t("report.copied"), kind: "warning" });
+      }
+      const durationMs = audio
+        ? (audio.pcm.byteLength / 2 / audio.sampleRate) * 1000
+        : this.clock.now() - this.dictationStarted;
+      this.history.record({ category: result.category, text: result.text, durationMs });
+      const summary = this.summarize(result.changes);
+      this.emit({
+        type: "dictation.result",
+        text: result.text,
+        changes: result.changes,
+        summary,
+        category: result.category,
+      });
+      this.emit({ type: "state", state: "done" });
+      return { text: result.text, changes: result.changes, summary, category: result.category, inserted };
+    } catch (error) {
+      const step = error instanceof StepError ? error.step : "cleaning";
+      this.emit({ type: "state", state: "error", step, message: (error as Error).message });
+      throw error;
+    }
+  }
+
+  summarize(changes: Change[]): ChangeSummary[] {
+    const counts = summarizeChanges(changes);
+    return (Object.entries(counts) as Array<[ChangeCategory, number]>).map(([category, count]) => ({
+      category,
+      count,
+      label: this.t(`report.${category}`, {
+        count,
+        word: changes.find((c) => c.category === category)?.after ?? "",
+      }),
+    }));
+  }
+
+  /** A correction the shell saw within 30 s of inserting text. A repeated one becomes a dictionary entry, with Undo. */
+  observeCorrection(inserted: string, corrected: string): { entryId: number; summary: ChangeSummary[] } | undefined {
+    this.learner.enabled = this.settings.get("dictation.learning");
+    const suggestion = this.learner.observe(inserted, corrected);
+    if (!suggestion) return undefined;
+    const entry = this.dictionary.add({ written: suggestion.written, spoken: [suggestion.spoken], source: "learned" });
+    const summary = this.summarize([suggestion.change]);
+    this.emit({ type: "dictation.result", text: "", changes: [suggestion.change], summary, category: "general" });
+    return { entryId: entry.id, summary };
+  }
+
+  // Voice edit
+
+  async runEdit(input: { audio?: Pcm16Audio; transcript?: string }): Promise<{ text: string }> {
+    const llm = await this.llm();
+    if (!llm) throw new Error(this.t("agent.no_llm"));
+    const instruction = input.transcript ?? (input.audio ? (await this.transcribe(input.audio)).text : "");
+    const context = (await (this.pendingContext ?? this.options.bridge.captureContext())) as CapturedContext;
+    this.pendingContext = undefined;
+    const bridge = this.options.bridge;
+    const text = await editSelection(
+      instruction,
+      {
+        insert: async (t) => void (await bridge.insertText(t)),
+        getSelection: async () => context.selection ?? "",
+        replaceSelection: async (t) => void (await bridge.insertText(t)),
+      },
+      llm,
+    );
+    this.emit({ type: "state", state: "done" });
+    return { text };
+  }
+
+  // Agent
+
+  async startTask(input: {
+    transcript?: string;
+    audio?: Pcm16Audio;
+    context?: CapturedContext;
+  }): Promise<{ taskId: string }> {
+    const transcript = input.transcript ?? (input.audio ? (await this.transcribe(input.audio)).text : "");
+    if (!transcript.trim()) throw new Error(this.t("report.didnt_catch"));
+    const context =
+      input.context ??
+      ((await (this.pendingContext ?? this.options.bridge.captureContext().catch(() => ({})))) as CapturedContext);
+    this.pendingContext = undefined;
+    const { taskId } = this.runner.start(transcript, {
+      ...context,
+      kind: categorize(context, this.settings.get("tone.overrides") as Record<string, AppCategory>),
+    });
+    return { taskId };
+  }
+
+  // Data
+
+  /** Removes the database, Murmur's keychain entries and the MCP config, then starts fresh. */
+  async deleteAll(): Promise<void> {
+    const indexed = this.settings.get("secrets.index");
+    const config = await loadConfig(this.mcpPath).catch(() => ({ servers: {} }));
+    const known = [LLM_KEY, WEB_SEARCH_KEY, ...this.registry.catalog().map((c) => tokenKey(c.id))];
+    for (const key of new Set([...indexed, ...known])) await this.options.bridge.secrets.delete(key).catch(() => {});
+    for (const server of Object.values(config.servers))
+      await forgetSecrets(server, this.options.bridge.secrets).catch(() => {});
+    this.scheduler.stop();
+    await this.mcp.close();
+    rmSync(this.mcpPath, { force: true });
+    this.db.destroy();
+    this.db = new Database(this.dbPath);
+    this.wire();
+    await this.start();
+  }
+
+  async close(): Promise<void> {
+    this.scheduler.stop();
+    await this.mcp.close();
+    this.db.close();
+  }
+}
+
+export interface DictationOutcome {
+  text: string;
+  changes: Change[];
+  summary: ChangeSummary[];
+  category: AppCategory;
+  inserted?: { ok: boolean; method: string };
+  empty?: boolean;
+  refused?: "secure";
+}
+
+export class StepError extends Error {
+  constructor(
+    readonly step: "transcribing" | "cleaning" | "inserting",
+    message: string,
+  ) {
+    super(message);
+  }
+}
