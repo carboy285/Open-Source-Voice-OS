@@ -63,7 +63,7 @@ If the whisper-cli choice doesn't stick (the field goes back to `whisper-cli`, o
 | #    | Do                                                                                    | Expect                                                                                      |
 | ---- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | 3.1  | Click into TextEdit. Hold Right Option, say "um so the meeting is uh at noon", let go | "So the meeting is at noon." appears at the cursor                                          |
-| 3.2  | Watch the screen while you press                                                      | The listening indicator appears the instant you press the key, with no delay                |
+| 3.2  | Watch the screen while you press                                                      | The listening surface grows out of the notch the instant you press the key                  |
 | 3.3  | Check the change card after inserting                                                 | It lists the removed fillers and disappears after a few seconds                             |
 | 3.4  | Tap Right Option very briefly                                                         | Nothing is inserted (a press under 300 ms counts as accidental)                             |
 | 3.5  | Hold, start speaking, press Esc                                                       | Listening is cancelled and nothing is inserted                                              |
@@ -80,11 +80,11 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 
 | #    | Do                                                                       | Expect                                                                                                                                   |
 | ---- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| 4.1  | Hold Right Option + Shift, say "remind me to stretch in two minutes"     | An approval window shows the reminder and its time, with Edit, Cancel and Save                                                           |
+| 4.1  | Hold Right Option + Shift, say "remind me to stretch in two minutes"     | An approval card hangs from the notch with the reminder and its time, with Edit, Cancel and Save                                         |
 | 4.2  | Press Cancel                                                             | Nothing is created; the reply says you cancelled                                                                                         |
 | 4.3  | Repeat, press Edit, change the text, Save, then approve                  | The preview shows your edited text before you approve; the reminder uses it                                                              |
 | 4.4  | Wait two minutes                                                         | A notification fires with Snooze and Done                                                                                                |
-| 4.5  | Repeat 4.1, then press Esc or close the window                           | Treated as Cancel                                                                                                                        |
+| 4.5  | Repeat 4.1, click the card, then press Esc                               | Treated as Cancel                                                                                                                        |
 | 4.6  | Ask to rename a file in a test folder (enable the Files connector first) | A preview appears before anything changes                                                                                                |
 | 4.7  | Ask something read-only: "what reminders do I have"                      | It answers with no approval prompt                                                                                                       |
 | 4.8  | Ask a multi-step task                                                    | It moves to the side panel, which slides in from the screen edge. You can keep typing elsewhere. A notification arrives when it finishes |
@@ -113,7 +113,7 @@ murmur list mcp
 | 6.2 | Turn on System Settings › Accessibility › Display › Reduce motion | Panels cross-fade instead of sliding                 |
 | 6.3 | Turn on Reduce transparency                                       | Panels and popovers become solid                     |
 | 6.4 | Open the side panel, then close it and reopen it quickly          | It reverses smoothly from where it was, with no jump |
-| 6.5 | Turn on VoiceOver, tab through the approval window                | Every control is labeled and reachable by keyboard   |
+| 6.5 | Turn on VoiceOver, tab through the approval card                  | Every control is labeled and reachable by keyboard   |
 
 ## 7. Privacy
 
@@ -121,6 +121,32 @@ murmur list mcp
 | --- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
 | 7.1 | Dictate several times, then run `find ~/Library/Application\ Support/Murmur -type f` | No audio files, only the database and the MCP config           |
 | 7.2 | Settings › Privacy › Delete all Murmur data                                          | The folder is emptied and saved keys are removed from Keychain |
+
+## 8. Notch
+
+Use the left Option key for ⌃⌥Space: Right Option is the dictation hotkey. If ⌃⌥Space switches your input source instead, turn off that shortcut in System Settings › Keyboard › Keyboard Shortcuts › Input Sources for this test.
+
+| #    | Do                                                                                                         | Expect                                                                                                                                            |
+| ---- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 8.1  | On a MacBook with a notch, hold Right Option                                                               | A black shape grows out of the notch: level bars on the left, the mode icon on the right, "Dictate · Esc to cancel" underneath                    |
+| 8.2  | Move the pointer to an external display (or close the lid) and repeat                                      | A black pill about the size of a notch appears at the top center of that display and grows the same way. With nothing showing, no pill is visible |
+| 8.3  | Press and release the hotkey quickly several times, watching the first frame                               | The surface appears on the key press with no delay, and a new press reverses a shrinking surface from its current size with no jump               |
+| 8.4  | Release after speaking                                                                                     | The line under the notch changes to "Transcribing", then "Cleaning up"                                                                            |
+| 8.5  | After an insert with changes, look at the notch                                                            | A short strip lists the first change. Hover it: it expands to the full list and stays open until the pointer leaves. It closes after about 6 s    |
+| 8.6  | In TextEdit, hold Right Option + Shift, say "remind me to stretch in five minutes", let go and keep typing | The card hangs from the notch. TextEdit keeps focus and your typing continues there. The screen is not dimmed                                     |
+| 8.7  | With the card showing, press plain Return in TextEdit                                                      | A new line in TextEdit; nothing is approved                                                                                                       |
+| 8.8  | Press ⌃⌥Space                                                                                              | The card takes focus; its hint changes to "⌘Return to confirm · Esc to cancel"                                                                    |
+| 8.9  | Press plain Return, then ⌘Return                                                                           | Return does nothing; ⌘Return approves. Focus goes back to TextEdit                                                                                |
+| 8.10 | Trigger another approval, press ⌃⌥Space, then Esc                                                          | It is cancelled and focus returns to TextEdit. Esc does nothing while the card isn't focused                                                      |
+| 8.11 | Trigger an approval, then click outside the card                                                           | The card stays; nothing is cancelled                                                                                                              |
+| 8.12 | Trigger an approval, then dictate while it waits                                                           | Listening takes over the notch and a "1 waiting" badge sits beside it with a slow, faint pulse. After the change report's 6 s, the card returns   |
+| 8.13 | Trigger approvals for two calls in one request                                                             | The badge (or the card's footer) shows the count; they come one after another in order                                                            |
+| 8.14 | Ask for a long task                                                                                        | A compact strip shows the step and step number when nothing else needs the notch; clicking it opens the side panel                                |
+| 8.15 | Put Safari in full screen and dictate, then trigger an approval                                            | Both appear above the full-screen app                                                                                                             |
+| 8.16 | Turn on Reduce motion and repeat 8.1 and 8.12                                                              | Surfaces cross-fade instead of growing; the badge does not pulse                                                                                  |
+| 8.17 | Turn on Increase contrast                                                                                  | Cards get a thin light border                                                                                                                     |
+| 8.18 | Turn on VoiceOver, then dictate and trigger an approval                                                    | VoiceOver says "Listening", then "Approval needed: …". Every button on the card has a label                                                       |
+| 8.19 | Unplug the external display while a surface shows                                                          | It moves to the remaining screen's notch or pill                                                                                                  |
 
 ## Reporting
 
