@@ -107,7 +107,13 @@ export interface ToolResult {
 
 export type Message =
   | { role: "user"; text: string }
-  | { role: "assistant"; text: string; toolCalls: ToolCall[] }
+  | {
+      role: "assistant";
+      text: string;
+      toolCalls: ToolCall[];
+      /** Provider-native content, replayed unchanged on the next request (keeps thinking blocks intact). */
+      raw?: unknown;
+    }
   | { role: "tool"; results: ToolResult[] };
 
 export interface LlmRequest {
@@ -121,6 +127,7 @@ export interface LlmRequest {
 export interface LlmResponse {
   text: string;
   toolCalls: ToolCall[];
+  raw?: unknown;
 }
 
 export interface LlmProvider {

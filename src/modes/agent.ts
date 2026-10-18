@@ -149,7 +149,7 @@ export async function runAgent(
         error instanceof Error ? error.message : String(error),
       );
     }
-    messages.push({ role: "assistant", text: response.text, toolCalls: response.toolCalls });
+    messages.push({ role: "assistant", text: response.text, toolCalls: response.toolCalls, raw: response.raw });
     if (response.toolCalls.length === 0) return outcome("done", response.text.trim(), step);
 
     const results: ToolResult[] = [];
