@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { parseArgs } from "node:util";
+import type { Pcm16Audio } from "../core/types.js";
 import { databasePath, mcpConfigPath } from "../core/paths.js";
 import { VERSION } from "../core/version.js";
 
@@ -14,7 +16,10 @@ const HELP = `Murmur ${VERSION}: voice dictation and a voice agent for your comp
 Usage:
   murmur daemon                      Run the core for a native shell (JSON-RPC on stdio)
   murmur clean "<text>" [--app <id>] Clean up a transcript and print the change report
-  murmur agent "<request>"           Run an agent task in this terminal, with approvals
+  murmur dictate --text <text> | --audio <file.wav> | --stdin
+                                     Clean up a transcript using your dictation settings
+  murmur agent --text <request> | --audio <file.wav> | --stdin
+                                     Run an agent task in this terminal, with approvals
   murmur add mcp <name> -- <command> [args...]
   murmur add mcp <name> --url <https-url> [--header KEY=VALUE]...
   murmur list mcp
@@ -69,8 +74,23 @@ async function main(argv: string[]): Promise<number> {
     }
     case "clean":
       return clean(rest);
-    case "agent":
-      return agent(rest.join(" "));
+    case "dictate":
+    case "agent": {
+      const { values } = parseArgs({
+        args: rest,
+        options: {
+          text: { type: "string" },
+          audio: { type: "string" },
+          stdin: { type: "boolean" },
+          help: { type: "boolean", short: "h" },
+        },
+      });
+      if (values.help) {
+        process.stdout.write(`${HELP}\n`);
+        return 0;
+      }
+      return runInput(await readInput(values), command);
+    }
     case "version":
     case "--version":
     case "-v":
@@ -108,11 +128,30 @@ async function clean(args: string[]): Promise<number> {
   return 0;
 }
 
-async function agent(request: string): Promise<number> {
-  if (!request.trim()) {
-    process.stderr.write('Say what to do: murmur agent "remind me to call Ana at 3"\n');
-    return 2;
+interface VoiceInput {
+  transcript?: string;
+  audio?: Pcm16Audio;
+}
+
+async function readInput(values: { text?: string; audio?: string; stdin?: boolean }): Promise<VoiceInput> {
+  const sources =
+    Number(values.text !== undefined) + Number(values.audio !== undefined) + Number(values.stdin === true);
+  if (sources !== 1) throw new Error("Provide exactly one of --text, --audio, or --stdin.");
+  if (values.audio !== undefined) {
+    const { readAudio } = await import("./audio.js");
+    return { audio: await readAudio(values.audio) };
   }
+  let transcript = values.text ?? "";
+  if (values.stdin) {
+    if (process.stdin.isTTY) throw new Error("--stdin requires piped text. Use --text in a terminal.");
+    process.stdin.setEncoding("utf8");
+    for await (const chunk of process.stdin) transcript += chunk;
+  }
+  if (!transcript.trim()) throw new Error("The input transcript is empty.");
+  return { transcript };
+}
+
+async function runInput(input: VoiceInput, mode: "dictate" | "agent"): Promise<number> {
   const { MurmurCore } = await import("../core/app.js");
   const { OsKeychainStore } = await import("../secrets/os-keychain.js");
   const { TerminalApprovalUi } = await import("./terminal-approval.js");
@@ -127,7 +166,7 @@ async function agent(request: string): Promise<number> {
       },
       captureContext: async () => ({}),
       secrets: new OsKeychainStore(),
-      approvals: new TerminalApprovalUi(),
+      approvals: process.stdin.isTTY ? new TerminalApprovalUi() : { request: async () => ({ decision: "cancel" }) },
       emit: (event) => {
         if (event.type === "task.update" && event.currentStep) process.stderr.write(`… ${event.currentStep}\n`);
       },
@@ -135,11 +174,15 @@ async function agent(request: string): Promise<number> {
   });
   await core.start();
   try {
+    if (mode === "dictate") {
+      await core.finishDictation(input);
+      return 0;
+    }
     if (!(await core.llm())) {
       process.stderr.write(`${core.t("agent.no_llm")} Or set ANTHROPIC_API_KEY.\n`);
       return 1;
     }
-    const { taskId } = await core.startTask({ transcript: request });
+    const { taskId } = await core.startTask(input);
     const done = await new Promise<{ reply: string; status: string }>((resolve) => {
       const poll = setInterval(() => {
         const task = core.runner.get(taskId);
