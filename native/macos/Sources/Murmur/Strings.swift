@@ -22,15 +22,29 @@ final class Strings: ObservableObject {
         var all = params
         all["count"] = String(count)
         let plural = "\(key).\(count == 1 ? "one" : "other")"
-        return table[plural] != nil ? self(plural, all) : self(key, all)
+        return table[plural] != nil || Strings.fallback[plural] != nil ? self(plural, all) : self(key, all)
     }
 
-    /// Shown only until the core answers.
+    /// Shown only until the core answers. The notch keys are here too, since a surface can appear before the catalog loads.
     private static let fallback: [String: String] = [
         "app.name": "Murmur",
         "menu.state.starting": "Starting",
         "menu.quit": "Quit Murmur",
         "error.core_stopped": "Murmur's engine stopped. Restarting…",
+        "notch.mode.dictate": "Dictate",
+        "notch.mode.ask": "Ask",
+        "notch.mode.edit": "Edit",
+        "notch.waiting.one": "{count} waiting",
+        "notch.waiting.other": "{count} waiting",
+        "notch.waiting.hint": "Approvals are waiting. They show here when the notch is free.",
+        "notch.approval_needed": "Approval needed: {summary}",
+        "notch.focus_hint": "Click or press ⌃⌥Space to use the keyboard",
+        "notch.keys_hint": "⌘Return to confirm · Esc to cancel",
+        "notch.step": "Step {count}",
+        "notch.open_tasks": "Open tasks",
+        "notch.show_all": "Show all",
+        "notch.show_less": "Show less",
+        "notch.close": "Close",
     ]
 }
 

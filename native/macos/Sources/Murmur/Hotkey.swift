@@ -13,6 +13,11 @@ final class HotkeyMonitor {
     var onDown: ((HotkeyAction) -> Void)?
     var onUp: (() -> Void)?
     var onEscape: (() -> Void)?
+    /// The notch focus shortcut, ⌃⌥Space by default (`notch.md`).
+    var onFocusShortcut: (() -> Void)?
+    /// kVK_Space, with Control and Option held.
+    var focusKeyCode: Int64 = 49
+    var focusModifiers: CGEventFlags = [.maskControl, .maskAlternate]
 
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
@@ -63,6 +68,10 @@ final class HotkeyMonitor {
         }
         let code = event.getIntegerValueField(.keyboardEventKeycode)
         if type == .keyDown {
+            if code == focusKeyCode, isFocusShortcut(event.flags) {
+                DispatchQueue.main.async { self.onFocusShortcut?() }
+                return
+            }
             if code == 53, isDown || toggleMode { // Esc
                 DispatchQueue.main.async { self.onEscape?() }
                 isDown = false
@@ -90,6 +99,12 @@ final class HotkeyMonitor {
             isDown = false
             DispatchQueue.main.async { self.onUp?() }
         }
+    }
+
+    /// Exactly the focus modifiers: Command or Shift held as well means a different shortcut.
+    private func isFocusShortcut(_ flags: CGEventFlags) -> Bool {
+        let relevant: CGEventFlags = [.maskControl, .maskAlternate, .maskCommand, .maskShift]
+        return flags.intersection(relevant) == focusModifiers
     }
 
     private func modifierFlag(for code: Int64) -> CGEventFlags {

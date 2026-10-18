@@ -13,16 +13,16 @@ enum ShellState: String {
 final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     static let shared = AppModel()
 
-    @Published var state: ShellState = .starting
+    // The notch picks its surface from these four, synchronously, so listening shows in the same frame as the key press.
+    @Published var state: ShellState = .starting { didSet { windows.updateNotch() } }
     @Published var level: Float = 0
     @Published var action: HotkeyAction = .dictate
     @Published var report: [ReportItem] = []
     @Published var reportMessage: String?
-    @Published var reportVisible = false
-    @Published var indicatorVisible = false
+    @Published var reportVisible = false { didSet { windows.updateNotch() } }
     @Published var undoEntryId: Int?
-    @Published var approvals: [Preview] = []
-    @Published var tasks: [String: TaskInfo] = [:]
+    @Published var approvals: [Preview] = [] { didSet { windows.updateNotch() } }
+    @Published var tasks: [String: TaskInfo] = [:] { didSet { windows.updateNotch() } }
     @Published var history: [TaskInfo] = []
     @Published var recent: [String] = []
     @Published var settings: JSONObject = [:]
@@ -61,6 +61,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         hotkey.onDown = { [weak self] action in self?.hotkeyDown(action) }
         hotkey.onUp = { [weak self] in self?.hotkeyUp() }
         hotkey.onEscape = { [weak self] in self?.cancelListening() }
+        hotkey.onFocusShortcut = { [weak self] in self?.windows.notch.focusApproval() }
         // Creating the event tap without permission files a TCC request on every launch, so check first.
         if Permissions.accessibility == .granted {
             if !hotkey.start() { state = .idle }
@@ -159,16 +160,16 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         guard state != .starting else { return }
         self.action = action
         pressStarted = Date()
+        // Setting the state shows the listening surface right away.
         state = .listening
+        reportTimer?.invalidate()
         reportVisible = false
-        windows.showIndicator()
         Cue.play(start: true, enabled: soundOn)
         do {
             try audio.start()
         } catch {
-            state = .error
             notice = L("error.no_mic")
-            windows.showIndicator()
+            showError(L("error.no_mic"))
             return
         }
         core.request("dictation.start")
@@ -208,7 +209,6 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         _ = audio.stop()
         core.request("dictation.cancel")
         state = .idle
-        windows.hideIndicator()
     }
 
     func retryDictation() {
@@ -221,7 +221,6 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
 
     private func finishQuietly() {
         state = .idle
-        windows.hideIndicator()
     }
 
     private func showError(_ message: String) {
@@ -231,23 +230,44 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         showReport(seconds: 8)
     }
 
-    /// The change report stays for 6 seconds, then the indicator goes away.
+    /// The change report stays for 6 seconds, then the notch moves on (a waiting approval returns).
     func showReport(seconds: TimeInterval = 6) {
-        windows.showIndicator()
         reportVisible = true
         reportTimer?.invalidate()
         reportTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
-            guard let self else { return }
-            self.reportVisible = false
-            if self.state != .listening {
-                self.state = self.activeTasks.isEmpty ? .idle : .agent
-                self.windows.hideIndicator()
-            }
+            self?.endReport()
         }
     }
 
     func dismissReport() {
-        reportTimer?.fire()
+        reportTimer?.invalidate()
+        endReport()
+    }
+
+    /// Hovering the report keeps it open; leaving it starts a short timer.
+    func holdReport(_ hold: Bool) {
+        guard reportVisible else { return }
+        if hold {
+            reportTimer?.invalidate()
+        } else {
+            showReport(seconds: 3)
+        }
+    }
+
+    private func endReport() {
+        reportTimer = nil
+        guard reportVisible else { return }
+        if state != .listening {
+            state = activeTasks.isEmpty ? .idle : .agent
+        }
+        reportVisible = false
+    }
+
+    /// Undo for a word the dictionary just learned.
+    func undoLearnedWord() {
+        guard let id = undoEntryId else { return }
+        core.request("dictionary.remove", ["id": id])
+        undoEntryId = nil
     }
 
     // MARK: Core notifications
@@ -269,8 +289,6 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                 reportMessage = params["message"] as? String
                 report = []
                 showReport(seconds: 8)
-            } else if next == .idle {
-                windows.hideIndicator()
             }
         case "dictation.result":
             report = (params["summary"] as? [JSONObject] ?? []).map {
@@ -286,7 +304,6 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             merged.startedAt = previous?.startedAt ?? Date()
             tasks[info.id] = merged
             if info.long, !(previous?.long ?? false) {
-                windows.hideIndicator()
                 showPanel()
             }
             if !info.isActive {
@@ -307,10 +324,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             } else {
                 approvals.append(preview)
             }
-            windows.showApproval()
         case "approval.dismiss":
             approvals.removeAll { $0.callId == params["callId"] as? String }
-            windows.showApproval()
         case "notify":
             postNotification(title: params["title"] as? String ?? "Murmur", body: params["body"] as? String ?? "")
         case "reminder.fire":

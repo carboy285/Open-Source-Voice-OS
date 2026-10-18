@@ -1,30 +1,20 @@
 import SwiftUI
 
-/// Shows the first pending preview. Each new preview (or a refreshed one after Edit) replaces it in place.
-struct ApprovalHost: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        if let preview = model.approvals.first {
-            ApprovalView(preview: preview, anchor: model.windows.approvalAnchor)
-                .id("\(preview.callId)-\(preview.edited)-\(preview.confirming)-\(preview.errors.count)")
-        } else {
-            Color.clear.frame(width: 480, height: 1)
-        }
-    }
-}
-
-/// Edit / Cancel / Send. Send is the default button; Esc and closing the window cancel.
+/// The preview content of the approval card at the notch: Edit / Cancel / Send.
+/// Once the card is focused, ⌘Return approves (or saves while editing) and Esc cancels. Plain Return never approves.
 struct ApprovalView: View {
     let preview: Preview
-    let anchor: UnitPoint
+    let width: CGFloat
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var strings: Strings
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var editing = false
     @State private var values: [String: String] = [:]
-    @State private var appeared = false
     @State private var showDetails = false
+
+    init(preview: Preview, width: CGFloat) {
+        self.preview = preview
+        self.width = width
+    }
 
     private var verb: String { L("approval.verb.\(preview.verb)") }
 
@@ -52,16 +42,10 @@ struct ApprovalView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(Space.xl)
-        .padding(.top, Space.s)
-        .frame(width: 480)
+        .frame(width: width, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
-        .surface(cornerRadius: 18)
-        .scaleEffect(appeared || reduceMotion ? 1 : 0.92, anchor: anchor)
-        .opacity(appeared ? 1 : 0)
         .onAppear {
             values = Dictionary(preview.fields.map { ($0.key, $0.text) }, uniquingKeysWith: { first, _ in first })
-            withAnimation(Motion.standard(reduceMotion: reduceMotion)) { appeared = true }
         }
     }
 
@@ -135,7 +119,7 @@ struct ApprovalView: View {
             if editing {
                 Button(L("approval.save")) { save() }
                     .buttonStyle(PressableButtonStyle(prominent: true))
-                    .keyboardShortcut(.defaultAction)
+                    .keyboardShortcut(.return, modifiers: .command)
                 Spacer()
                 Button(L("approval.cancel")) { model.respond(preview, decision: "cancel") }
                     .buttonStyle(PressableButtonStyle())
@@ -144,14 +128,16 @@ struct ApprovalView: View {
                 Button(L("approval.edit")) { editing = true }
                     .buttonStyle(PressableButtonStyle())
                     .disabled(preview.fields.isEmpty)
+                    .accessibilityLabel(L("approval.edit"))
                 Spacer()
                 Button(L("approval.cancel")) { model.respond(preview, decision: "cancel") }
                     .buttonStyle(PressableButtonStyle())
                     .keyboardShortcut(.cancelAction)
                 Button(preview.confirming ? L("approval.confirm") : verb) { model.respond(preview, decision: "approve") }
                     .buttonStyle(PressableButtonStyle(prominent: true, destructive: preview.destructive))
-                    .keyboardShortcut(.defaultAction)
-                    .accessibilityHint(preview.destructive ? L("approval.confirm") : "")
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .accessibilityLabel(preview.confirming ? L("approval.confirm") : verb)
+                    .accessibilityHint(L("notch.keys_hint"))
             }
         }
     }

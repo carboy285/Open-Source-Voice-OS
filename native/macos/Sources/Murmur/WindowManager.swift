@@ -9,16 +9,14 @@ final class KeyablePanel: NSPanel {
 /// Creates and positions every window. Views animate their own content; windows only appear and disappear.
 final class WindowManager: NSObject, NSWindowDelegate {
     unowned let model: AppModel
-    private var indicator: NSPanel?
-    private var approval: NSPanel?
-    private var dim: NSWindow?
     private var panel: KeyablePanel?
     private var settings: NSWindow?
     private var onboarding: NSWindow?
-    private var indicatorHide: DispatchWorkItem?
     private var panelHide: DispatchWorkItem?
 
-    static let indicatorSize = NSSize(width: 380, height: 340)
+    /// Listening, change report, approval, task progress and the waiting badge, all at the notch.
+    lazy var notch = NotchController(model: model)
+
     static let panelWidth: CGFloat = 380
 
     init(model: AppModel) {
@@ -26,125 +24,19 @@ final class WindowManager: NSObject, NSWindowDelegate {
     }
 
     private var activeScreen: NSScreen {
-        let mouse = NSEvent.mouseLocation
-        return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
+        NotchGeometry.pointerScreen() ?? NSScreen.screens[0]
     }
 
-    /// Where the indicator capsule sits on screen; popovers and the approval preview grow from here.
-    var indicatorPoint: NSPoint {
-        guard let frame = indicator?.frame else {
-            let visible = activeScreen.visibleFrame
-            return NSPoint(x: visible.midX, y: visible.minY + 40)
-        }
-        return NSPoint(x: frame.midX, y: frame.minY + 26)
+    // MARK: Notch
+
+    /// Picks the notch surface again after the state, report, approvals or tasks changed.
+    func updateNotch() {
+        notch.update()
     }
 
-    // MARK: Indicator
-
-    func showIndicator() {
-        indicatorHide?.cancel()
-        if indicator == nil {
-            let window = NSPanel(
-                contentRect: NSRect(origin: .zero, size: WindowManager.indicatorSize),
-                styleMask: [.borderless, .nonactivatingPanel],
-                backing: .buffered,
-                defer: false
-            )
-            window.isFloatingPanel = true
-            window.level = .statusBar
-            window.backgroundColor = .clear
-            window.isOpaque = false
-            window.hasShadow = false
-            window.hidesOnDeactivate = false
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-            window.contentView = NSHostingView(rootView: IndicatorView().environmentObject(model).environmentObject(L))
-            indicator = window
-        }
-        guard let window = indicator else { return }
-        if !window.isVisible {
-            let visible = activeScreen.visibleFrame
-            window.setFrameOrigin(NSPoint(x: visible.midX - WindowManager.indicatorSize.width / 2, y: visible.minY + 16))
-        }
-        window.orderFrontRegardless()
-        model.indicatorVisible = true
-    }
-
-    func hideIndicator() {
-        model.indicatorVisible = false
-        model.reportVisible = false
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, !self.model.indicatorVisible else { return }
-            self.indicator?.orderOut(nil)
-        }
-        indicatorHide = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
-    }
-
-    // MARK: Approval
-
-    /// Shows the first pending preview, dimming the screen behind it. Closes both when none is left.
+    /// Focuses the approval card at the notch (the side panel's Review button).
     func showApproval() {
-        guard !model.approvals.isEmpty else {
-            approval?.orderOut(nil)
-            dim?.orderOut(nil)
-            return
-        }
-        let screen = activeScreen
-        if dim == nil {
-            let window = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
-            window.backgroundColor = NSColor.black.withAlphaComponent(0.22)
-            window.isOpaque = false
-            window.level = .floating
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            dim = window
-        }
-        dim?.setFrame(screen.frame, display: false)
-        if approval == nil {
-            let window = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 480, height: 360),
-                styleMask: [.titled, .closable, .fullSizeContentView],
-                backing: .buffered,
-                defer: false
-            )
-            window.titlebarAppearsTransparent = true
-            window.titleVisibility = .hidden
-            window.isMovableByWindowBackground = true
-            window.level = .modalPanel
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            window.delegate = self
-            window.backgroundColor = .clear
-            let hosting = NSHostingController(rootView: ApprovalHost().environmentObject(model).environmentObject(L))
-            hosting.sizingOptions = [.preferredContentSize]
-            window.contentViewController = hosting
-            approval = window
-        }
-        guard let window = approval else { return }
-        if !window.isVisible {
-            let visible = screen.visibleFrame
-            let size = window.frame.size
-            window.setFrameOrigin(NSPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2 + 60))
-        }
-        dim?.orderFrontRegardless()
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
-    }
-
-    /// Unit point of the indicator inside the approval window, so the preview grows from it.
-    var approvalAnchor: UnitPoint {
-        guard let frame = approval?.frame, frame.width > 0, frame.height > 0 else { return .bottom }
-        let point = indicatorPoint
-        let x = min(max((point.x - frame.minX) / frame.width, 0), 1)
-        let y = min(max(1 - (point.y - frame.minY) / frame.height, 0), 1)
-        return UnitPoint(x: x, y: y)
-    }
-
-    /// Closing the preview window means Cancel.
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if sender === approval, let preview = model.approvals.first {
-            model.respond(preview, decision: "cancel")
-            return false
-        }
-        return true
+        notch.focusApproval()
     }
 
     // MARK: Side panel
