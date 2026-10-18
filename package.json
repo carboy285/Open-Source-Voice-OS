@@ -1,0 +1,39 @@
+{
+  "name": "open-source-voice-os",
+  "version": "0.1.0",
+  "description": "Open-source voice layer for your computer: dictation, voice edit and an MCP-powered agent mode.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "tsx src/cli/main.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/carboy285/open-source-voice-os.git"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/carboy285/open-source-voice-os/issues"
+  },
+  "homepage": "https://github.com/carboy285/open-source-voice-os#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "type": "module",
+  "bin": {
+    "voiceos": "dist/cli/main.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
