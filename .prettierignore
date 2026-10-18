@@ -6,3 +6,4 @@ docs/spec
 native/windows/**/bin
 native/windows/**/obj
 native/macos/.build
+build

@@ -164,5 +164,9 @@
   "agent.no_llm": "エージェントにはモデルが必要です。設定から追加してください。",
   "agent.cancelled": "タスクを止めました",
   "agent.step_limit": "手順が多すぎるため止めました。",
-  "agent.time_limit": "時間がかかりすぎたため止めました。"
+  "agent.time_limit": "時間がかかりすぎたため止めました。",
+  "menu.recent.words.one": "1 語",
+  "menu.recent.words.other": "{count} 語",
+  "settings.connectors.connect": "接続",
+  "settings.connectors.client_id_missing": "先にこの連携の OAuth クライアント ID を入力してください。"
 }

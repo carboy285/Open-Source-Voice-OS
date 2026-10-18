@@ -191,6 +191,12 @@ export function registerMethods(peer: JsonRpcPeer, core: MurmurCore, approvals: 
       core.settings.set("connectors.settings", all);
       return { ok: true };
     })
+    .handle("connectors.authorize", async (p) => {
+      await core.authorizeConnector(str(p.id, "id"), async (url) => {
+        await peer.request("url.open", { url });
+      });
+      return { ok: true };
+    })
     .handle("mcp.reload", async () => {
       await core.reloadMcp();
       return { servers: core.mcp.status() };

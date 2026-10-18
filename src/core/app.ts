@@ -1,6 +1,7 @@
 import { rmSync } from "node:fs";
 import { builtinConnectors } from "../connectors/index.js";
-import { tokenKey } from "../connectors/oauth.js";
+import { randomUUID } from "node:crypto";
+import { authorizeUrl, createPkce, exchangeCode, saveTokens, tokenKey, waitForRedirect } from "../connectors/oauth.js";
 import { CompositeToolHost, ConnectorRegistry, type RegistryState } from "../connectors/registry.js";
 import type { ConnectorContext } from "../connectors/types.js";
 import { WEB_SEARCH_KEY } from "../connectors/web.js";
@@ -425,6 +426,33 @@ export class MurmurCore {
       kind: categorize(context, this.settings.get("tone.overrides") as Record<string, AppCategory>),
     });
     return { taskId };
+  }
+
+  // Connectors
+
+  static readonly OAUTH_PORT = 53682;
+
+  /** Runs the OAuth PKCE flow for a connector with the user's own client ID. `open` shows the consent page. */
+  async authorizeConnector(id: string, open: (url: string) => Promise<void>): Promise<void> {
+    const connector = this.registry.get(id);
+    if (!connector || connector.auth.type !== "oauth2-pkce") throw new Error(`${id} does not use OAuth.`);
+    const clientId = this.settings.get("connectors.settings")[id]?.clientId;
+    if (typeof clientId !== "string" || !clientId) throw new Error(this.t("settings.connectors.client_id_missing"));
+    const config = {
+      authorizeUrl: connector.auth.authorizeUrl,
+      tokenUrl: connector.auth.tokenUrl,
+      clientId,
+      scopes: connector.auth.scopes,
+      redirectUri: `http://127.0.0.1:${MurmurCore.OAUTH_PORT}/callback`,
+      extraParams: connector.auth.extraParams,
+    };
+    const pkce = createPkce();
+    const state = randomUUID();
+    const redirect = waitForRedirect(MurmurCore.OAUTH_PORT, state);
+    await open(authorizeUrl(config, pkce, state));
+    const { code } = await redirect;
+    const tokens = await exchangeCode(config, code, pkce.verifier, this.options.fetch ?? fetch, this.clock.now());
+    await saveTokens(this.secrets, id, tokens);
   }
 
   // Data

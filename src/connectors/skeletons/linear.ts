@@ -1,14 +1,15 @@
 import { clip, objectSchema, str, type Connector, type ConnectorContext } from "../types.js";
 import { apiJson, clientIdSetting } from "./http.js";
 
-const self = { id: "linear", name: "Linear" };
+const self = { id: "linear", name: "Linear", tokenUrl: "https://api.linear.app/oauth/token" };
 
 const graphql = (ctx: ConnectorContext, query: string, variables: Record<string, unknown>) =>
   apiJson(ctx, self, "https://api.linear.app/graphql", { method: "POST", json: { query, variables } });
 
 export function linearConnector(): Connector {
   return {
-    ...self,
+    id: self.id,
+    name: self.name,
     description: "Search issues and file new ones in Linear.",
     icon: "issue",
     status: "skeleton",

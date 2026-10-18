@@ -1,7 +1,7 @@
 import { clip, objectSchema, str, strList, type Connector } from "../types.js";
 import { apiJson, clientIdSetting, GOOGLE_AUTH, rawEmail } from "./http.js";
 
-const self = { id: "gmail", name: "Gmail" };
+const self = { id: "gmail", name: "Gmail", tokenUrl: "https://oauth2.googleapis.com/token" };
 const BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const recipients = { type: "array", items: { type: "string", format: "email" }, minItems: 1 };
 const message = objectSchema(
@@ -19,7 +19,8 @@ const emailSummary = (i: Record<string, unknown>) =>
 
 export function gmailConnector(): Connector {
   return {
-    ...self,
+    id: self.id,
+    name: self.name,
     description: "Search your mail, write drafts and send email from Gmail.",
     icon: "mail",
     status: "skeleton",

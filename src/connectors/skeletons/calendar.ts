@@ -2,12 +2,13 @@ import { formatLocal } from "../../reminders/time.js";
 import { clip, objectSchema, str, strList, type Connector } from "../types.js";
 import { apiJson, clientIdSetting, GOOGLE_AUTH } from "./http.js";
 
-const self = { id: "calendar", name: "Google Calendar" };
+const self = { id: "calendar", name: "Google Calendar", tokenUrl: "https://oauth2.googleapis.com/token" };
 const BASE = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 
 export function calendarConnector(): Connector {
   return {
-    ...self,
+    id: self.id,
+    name: self.name,
     description: "See upcoming events and book new ones in Google Calendar.",
     icon: "calendar",
     status: "skeleton",

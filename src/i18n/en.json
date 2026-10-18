@@ -164,5 +164,9 @@
   "agent.no_llm": "Agent mode needs a model. Open Settings to add one.",
   "agent.cancelled": "Task stopped",
   "agent.step_limit": "I stopped because the task needed too many steps.",
-  "agent.time_limit": "I stopped because the task took too long."
+  "agent.time_limit": "I stopped because the task took too long.",
+  "menu.recent.words.one": "1 word",
+  "menu.recent.words.other": "{count} words",
+  "settings.connectors.connect": "Connect",
+  "settings.connectors.client_id_missing": "Add your OAuth client ID for this connector first."
 }

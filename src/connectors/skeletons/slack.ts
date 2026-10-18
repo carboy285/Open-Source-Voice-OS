@@ -1,11 +1,12 @@
 import { clip, objectSchema, str, type Connector } from "../types.js";
 import { apiJson, clientIdSetting } from "./http.js";
 
-const self = { id: "slack", name: "Slack" };
+const self = { id: "slack", name: "Slack", tokenUrl: "https://slack.com/api/oauth.v2.access" };
 
 export function slackConnector(): Connector {
   return {
-    ...self,
+    id: self.id,
+    name: self.name,
     description: "Search messages and post to channels or people in Slack.",
     icon: "chat",
     status: "skeleton",

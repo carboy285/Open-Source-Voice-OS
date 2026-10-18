@@ -1,14 +1,19 @@
-import { accessToken } from "../oauth.js";
+import { accessToken, type OAuthConfig } from "../oauth.js";
 import type { ConnectorContext } from "../types.js";
 
 /** Calls an official API with the stored OAuth token. */
 export async function apiJson(
   ctx: ConnectorContext,
-  connector: { id: string; name: string },
+  connector: { id: string; name: string; tokenUrl?: string },
   url: string,
   init: RequestInit & { json?: unknown } = {},
 ): Promise<Record<string, unknown>> {
-  const token = await accessToken(ctx.secrets, connector.id, undefined, ctx.fetch, ctx.clock.now());
+  const clientId = typeof ctx.settings.clientId === "string" ? ctx.settings.clientId : "";
+  const refresh: OAuthConfig | undefined =
+    connector.tokenUrl && clientId
+      ? { tokenUrl: connector.tokenUrl, clientId, authorizeUrl: "", scopes: [], redirectUri: "" }
+      : undefined;
+  const token = await accessToken(ctx.secrets, connector.id, refresh, ctx.fetch, ctx.clock.now());
   if (!token) throw new Error(`Connect ${connector.name} in Settings › Connectors first.`);
   const headers: Record<string, string> = {
     authorization: `Bearer ${token}`,

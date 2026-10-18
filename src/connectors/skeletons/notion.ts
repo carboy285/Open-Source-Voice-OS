@@ -1,12 +1,13 @@
 import { clip, objectSchema, str, type Connector } from "../types.js";
 import { apiJson, clientIdSetting } from "./http.js";
 
-const self = { id: "notion", name: "Notion" };
+const self = { id: "notion", name: "Notion", tokenUrl: "https://api.notion.com/v1/oauth/token" };
 const VERSION = { "notion-version": "2022-06-28" };
 
 export function notionConnector(): Connector {
   return {
-    ...self,
+    id: self.id,
+    name: self.name,
     description: "Search pages and create new ones in Notion.",
     icon: "doc",
     status: "skeleton",

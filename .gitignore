@@ -8,3 +8,4 @@ native/windows/**/bin
 native/windows/**/obj
 *.user
 .DS_Store
+build

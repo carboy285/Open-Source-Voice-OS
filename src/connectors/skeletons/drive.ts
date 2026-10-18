@@ -1,11 +1,12 @@
 import { clip, objectSchema, str, type Connector } from "../types.js";
 import { apiJson, clientIdSetting, GOOGLE_AUTH } from "./http.js";
 
-const self = { id: "drive", name: "Google Drive" };
+const self = { id: "drive", name: "Google Drive", tokenUrl: "https://oauth2.googleapis.com/token" };
 
 export function driveConnector(): Connector {
   return {
-    ...self,
+    id: self.id,
+    name: self.name,
     description: "Find files in Google Drive and create Google Docs.",
     icon: "cloud",
     status: "skeleton",
