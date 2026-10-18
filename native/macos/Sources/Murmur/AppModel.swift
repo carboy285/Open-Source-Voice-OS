@@ -105,7 +105,9 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             center.setNotificationCategories([UNNotificationCategory(identifier: "reminder", actions: [snooze, done], intentIdentifiers: [], options: [])])
             center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
         }
-        if !UserDefaults.standard.bool(forKey: "onboarded") || Permissions.microphone != .granted {
+        // Setup opens once, on the very first launch. After an update the app just starts; if macOS
+        // forgot a permission (ad-hoc builds lose them), the menu offers "Finish setup" instead.
+        if !UserDefaults.standard.bool(forKey: "onboarded") {
             windows.showOnboarding()
         }
     }

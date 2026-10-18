@@ -62,7 +62,7 @@ struct MenuContent: View {
         Button(L("menu.settings")) { model.windows.showSettings() }
             .keyboardShortcut(",")
         if model.micStatus != .granted || model.axStatus != .granted {
-            Button(L("onboarding.title")) { model.windows.showOnboarding() }
+            Button(L("menu.finish_setup")) { model.windows.showOnboarding() }
         }
         Divider()
         UpdateMenuItems(updater: model.updater)
