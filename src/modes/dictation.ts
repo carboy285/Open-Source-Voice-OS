@@ -1,4 +1,5 @@
 import type { AppContext, LlmProvider, TextInjector } from "../core/types.js";
+import { applyVocabulary, type Vocabulary } from "../core/vocabulary.js";
 
 const FILLERS = /\b(?:um+|uh+|erm?|hmm+|you know|i mean)\b[,.]?\s*/gi;
 
@@ -15,6 +16,8 @@ const SPOKEN_PUNCTUATION: Array<[RegExp, string]> = [
 export interface CleanupOptions {
   /** Convert spoken "comma", "period", "new line" into symbols. Off by default: they are also normal words. */
   spokenPunctuation?: boolean;
+  /** Literal phrase replacements, applied after cleanup to preserve preferred spelling and casing. */
+  vocabulary?: Vocabulary;
 }
 
 /** Deterministic cleanup that needs no model: fillers, stutters, casing, sentence punctuation. */
@@ -29,7 +32,7 @@ export function cleanTranscript(raw: string, options: CleanupOptions = {}): stri
   if (!text) return "";
   text = text.replace(/(^|[.!?]\s+|\n)([a-z])/g, (_, lead: string, ch: string) => lead + ch.toUpperCase());
   if (!/[.!?]$/.test(text) && !text.includes("\n")) text += ".";
-  return text;
+  return applyVocabulary(text, options.vocabulary);
 }
 
 const POLISH_SYSTEM = `You clean up dictated speech. Fix grammar and punctuation, remove disfluencies, and keep the speaker's meaning, wording and language. Match the formatting conventions of the app described by the user. Reply with the cleaned text only: no quotes, no commentary.`;
@@ -45,7 +48,7 @@ export async function dictate(
   context: AppContext = {},
   options: DictationOptions = {},
 ): Promise<string> {
-  let text = cleanTranscript(transcript, options);
+  let text = cleanTranscript(transcript, { ...options, vocabulary: undefined });
   if (!text) return "";
   if (options.polish) {
     const where = context.appName ? `The text goes into ${context.appName}${context.kind ? ` (${context.kind})` : ""}.` : "";
@@ -56,6 +59,7 @@ export async function dictate(
     });
     text = response.text.trim() || text;
   }
+  text = applyVocabulary(text, options.vocabulary);
   await injector.insert(text);
   return text;
 }

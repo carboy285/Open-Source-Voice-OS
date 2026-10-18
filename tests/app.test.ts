@@ -121,6 +121,15 @@ describe("VoiceSession", () => {
     expect(t.log).toEqual(["start", "stop"]);
   });
 
+  it("uses vocabulary and spoken punctuation from desktop dictation settings", async () => {
+    const t = setup({ transcript: "eye oh ess comma git hub" });
+    t.session["deps"].dictationOptions = {
+      spokenPunctuation: true, vocabulary: { "eye oh ess": "iOS", "git hub": "GitHub" },
+    };
+    await t.tap();
+    expect(t.injector.text).toBe("iOS, GitHub.");
+  });
+
   it("ignores an accidental tap", async () => {
     const t = setup({ heldMs: 50 });
     await t.tap();
@@ -151,5 +160,23 @@ describe("VoiceSession", () => {
     await t.tap();
     expect(t.events.at(-1)).toEqual(["error", "whisper missing"]);
     expect(t.session.busy).toBe(false);
+  });
+
+  it("does not start another recording while cancellation is cleaning up", async () => {
+    const t = setup();
+    let finishCancel!: () => void;
+    t.session["deps"].recorder.cancel = () => new Promise<void>((resolve) => (finishCancel = resolve));
+    t.session.press("dictate");
+    const cancelling = t.session.cancel();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(t.session.busy).toBe(true);
+    t.session.press("edit");
+    expect(t.log).toEqual(["start"]);
+    finishCancel();
+    await cancelling;
+    expect(t.session.busy).toBe(false);
+    await t.tap();
+    expect(t.injector.text).toBe("Hello world.");
   });
 });

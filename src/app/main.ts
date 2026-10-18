@@ -70,18 +70,25 @@ function onStatus(state: UiState, text?: string, mode?: keyof typeof LABELS) {
 function createRecorder(): Recorder {
   let waiting: { resolve: (path: string) => void; reject: (error: Error) => void } | undefined;
   ipcMain.on("recorder:audio", async (_event, payload: { samples: Float32Array; sampleRate: number }) => {
+    const request = waiting;
+    waiting = undefined;
+    if (!request) return;
     try {
       const file = join(tmpdir(), `voiceos-${Date.now()}.wav`);
       await writeFile(file, toWhisperWav(new Float32Array(payload.samples), payload.sampleRate), { mode: 0o600 });
-      waiting?.resolve(file);
+      request.resolve(file);
     } catch (error) {
-      waiting?.reject(error as Error);
+      request.reject(error as Error);
     }
-    waiting = undefined;
   });
   ipcMain.on("recorder:error", (_event, message: string) => {
-    onStatus("error", `Microphone error: ${message}`);
-    void voice.cancel();
+    const error = new Error(`Microphone error: ${message}`);
+    if (waiting) {
+      waiting.reject(error);
+      waiting = undefined;
+    } else {
+      void voice.cancel().finally(() => onStatus("error", error.message));
+    }
   });
   return {
     start: async () => void recorderWindow.webContents.send("recorder:start"),
@@ -206,6 +213,7 @@ app.whenReady().then(async () => {
     status: onStatus,
     frontmostApp: () => frontmostApp(realExec),
     polishDictation: config.polishDictation,
+    dictationOptions: { spokenPunctuation: config.spokenPunctuation, vocabulary: config.vocabulary },
   });
 
   buildTray();

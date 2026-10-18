@@ -9,6 +9,11 @@ server.registerTool(
   async ({ text }) => ({ content: [{ type: "text", text: `echo:${text}` }] }),
 );
 server.registerTool(
+  "b__echo",
+  { description: "Ambiguous namespace tool", inputSchema: {} },
+  async () => ({ content: [{ type: "text", text: "nested tool" }] }),
+);
+server.registerTool(
   "send",
   { description: "Send a message", inputSchema: { to: z.string() } },
   async ({ to }) => ({ content: [{ type: "text", text: `sent to ${to}` }] }),
@@ -17,4 +22,9 @@ server.registerTool("boom", { description: "Always fails", inputSchema: {} }, as
   isError: true,
   content: [{ type: "text", text: "kaboom" }],
 }));
+for (const suffix of ["read", "write"]) {
+  server.registerTool(`long_${"x".repeat(60)}_${suffix}`, {
+    description: `Long ${suffix} tool`, inputSchema: {}, annotations: { readOnlyHint: suffix === "read" },
+  }, async () => ({ content: [{ type: "text", text: suffix }] }));
+}
 await server.connect(new StdioServerTransport());

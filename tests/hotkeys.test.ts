@@ -61,6 +61,8 @@ describe("app config", () => {
     expect(config.llm).toBe("codex");
     expect(config.hotkeys).toEqual({ dictate: "AltRight", edit: "MetaRight", agent: "CtrlRight" });
     expect(config.polishDictation).toBe(false);
+    expect(config.spokenPunctuation).toBe(false);
+    expect(config.vocabulary).toEqual({});
   });
 
   it("maps config to the environment used by the providers", () => {
@@ -71,5 +73,11 @@ describe("app config", () => {
 
   it("rejects an unknown backend", () => {
     expect(() => parseAppConfig('{"llm":"other"}')).toThrow();
+  });
+
+  it("validates custom vocabulary settings", () => {
+    expect(parseAppConfig('{"vocabulary":{"git hub":"GitHub"},"spokenPunctuation":true}').vocabulary)
+      .toEqual({ "git hub": "GitHub" });
+    expect(() => parseAppConfig('{"vocabulary":{"":"empty alias"}}')).toThrow();
   });
 });

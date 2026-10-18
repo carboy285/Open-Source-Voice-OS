@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Vocabulary } from "../core/vocabulary.js";
 
 const KeyName = z.string().min(1);
 
@@ -12,6 +13,8 @@ export const AppConfig = z.object({
   mcpConfig: z.string().optional(),
   /** Refine dictation with the model. Slower because each call starts a Codex run. */
   polishDictation: z.boolean().default(false),
+  spokenPunctuation: z.boolean().default(false),
+  vocabulary: Vocabulary.default({}),
   /** Hold-to-talk keys, by uiohook key name. Defaults avoid keys that type characters. */
   hotkeys: z
     .object({

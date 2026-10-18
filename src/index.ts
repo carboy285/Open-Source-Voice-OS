@@ -1,4 +1,5 @@
 export * from "./core/types.js";
+export * from "./core/vocabulary.js";
 export * from "./modes/dictation.js";
 export * from "./modes/edit.js";
 export * from "./modes/agent.js";

@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { createLlm, createStt } from "../config.js";
+import { Vocabulary } from "../core/vocabulary.js";
 import type { ConfirmHandler, ToolHost } from "../core/types.js";
 import { loadMcpConfig, McpToolHost } from "../mcp/host.js";
 import { runAgent } from "../modes/agent.js";
@@ -15,20 +17,36 @@ const USAGE = `voiceos <command>
 
   login                         Sign in with your ChatGPT plan (runs "codex login")
   status                        Show Codex sign-in status
-  dictate  --text T | --audio F [--app NAME] [--polish] [--spoken-punctuation]
+  dictate  --text T | --audio F | --stdin [--app NAME] [--polish] [--spoken-punctuation] [--vocabulary FILE]
   edit     --instruction I --selection S
-  agent    --text T | --audio F [--mcp FILE] [--yes]
+  agent    --text T | --audio F | --stdin [--mcp FILE] [--yes]
+  help, --help, -h               Show this help
 
 Model: VOICEOS_LLM=codex (default) or anthropic. Audio needs WHISPER_MODEL (whisper.cpp).
 MCP servers: --mcp FILE or ./voiceos.mcp.json, e.g. REA (see voiceos.mcp.example.json).`;
 
-async function transcript(values: { text?: string; audio?: string }): Promise<string> {
-  if (values.text) return values.text;
-  if (values.audio) return createStt().transcribe(values.audio);
-  throw new Error("Provide --text or --audio.");
+async function transcript(values: { text?: string; audio?: string; stdin?: boolean }): Promise<string> {
+  const sources = Number(values.text !== undefined) + Number(values.audio !== undefined) + Number(values.stdin === true);
+  if (sources !== 1) throw new Error("Provide exactly one of --text, --audio, or --stdin.");
+  let text: string;
+  if (values.text !== undefined) text = values.text;
+  else if (values.audio !== undefined) text = await createStt().transcribe(values.audio);
+  else {
+    if (process.stdin.isTTY) throw new Error("--stdin requires piped text. Use --text for interactive input.");
+    process.stdin.setEncoding("utf8");
+    text = "";
+    for await (const chunk of process.stdin) text += chunk;
+  }
+  if (!text.trim()) throw new Error("The transcript is empty.");
+  return text;
 }
 
 const askConfirm: ConfirmHandler = async ({ tool, input }) => {
+  // Piped stdin is the transcript, not a place to solicit approval. Fail closed unless --yes was explicit.
+  if (!process.stdin.isTTY) {
+    console.error(`Cannot ask permission for "${tool}" without a terminal; action denied. Use --yes only to approve all tools.`);
+    return false;
+  }
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   try {
     const answer = await rl.question(`Allow ${tool} ${JSON.stringify(input)}? [y/N] `);
@@ -40,11 +58,22 @@ const askConfirm: ConfirmHandler = async ({ tool, input }) => {
 
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
+  if (!command || ["help", "--help", "-h"].includes(command)) {
+    console.log(USAGE);
+    return 0;
+  }
+  if (!["login", "status", "dictate", "edit", "agent"].includes(command)) {
+    console.error(`Unknown command: ${command}\n\n${USAGE}`);
+    return 2;
+  }
   const { values } = parseArgs({
     args: rest,
     options: {
       text: { type: "string" },
       audio: { type: "string" },
+      stdin: { type: "boolean" },
+      help: { type: "boolean", short: "h" },
+      vocabulary: { type: "string" },
       app: { type: "string" },
       polish: { type: "boolean" },
       "spoken-punctuation": { type: "boolean" },
@@ -54,6 +83,10 @@ async function main(argv: string[]): Promise<number> {
       yes: { type: "boolean" },
     },
   });
+  if (values.help) {
+    console.log(USAGE);
+    return 0;
+  }
 
   switch (command) {
     case "login":
@@ -65,11 +98,14 @@ async function main(argv: string[]): Promise<number> {
     }
     case "dictate": {
       const injector = new StdoutInjector();
+      const vocabulary = values.vocabulary
+        ? Vocabulary.parse(JSON.parse(await readFile(values.vocabulary, "utf8")))
+        : undefined;
       await dictate(
         await transcript(values),
         injector,
         { appName: values.app },
-        { spokenPunctuation: values["spoken-punctuation"], polish: values.polish ? createLlm() : undefined },
+        { spokenPunctuation: values["spoken-punctuation"], vocabulary, polish: values.polish ? createLlm() : undefined },
       );
       return 0;
     }

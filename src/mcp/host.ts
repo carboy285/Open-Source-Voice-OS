@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import type { ToolHost, ToolSpec } from "../core/types.js";
 
@@ -30,6 +32,8 @@ interface Connected {
  * everything else is treated as side-effecting and needs confirmation.
  */
 export class McpToolHost implements ToolHost {
+  private routes: Map<string, { client: Client; toolName: string }> | undefined;
+
   private constructor(private readonly servers: Connected[]) {}
 
   static async connect(config: McpConfig): Promise<McpToolHost> {
@@ -38,8 +42,8 @@ export class McpToolHost implements ToolHost {
       for (const [name, server] of Object.entries(config.servers)) {
         const client = new Client({ name: "voiceos", version: "0.1.0" });
         const env = { ...(process.env as Record<string, string>), ...server.env };
-        await client.connect(new StdioClientTransport({ command: server.command, args: server.args, env }));
         servers.push({ name, client });
+        await client.connect(new StdioClientTransport({ command: server.command, args: server.args, env }));
       }
     } catch (error) {
       await Promise.allSettled(servers.map((s) => s.client.close()));
@@ -49,31 +53,56 @@ export class McpToolHost implements ToolHost {
   }
 
   async list(): Promise<ToolSpec[]> {
-    const specs: ToolSpec[] = [];
-    for (const { name, client } of this.servers) {
-      const { tools } = await client.listTools();
-      for (const tool of tools) {
-        specs.push({
-          name: `${name}${SEPARATOR}${tool.name}`.slice(0, 64),
-          description: tool.description ?? "",
-          inputSchema: tool.inputSchema as Record<string, unknown>,
-          readOnly: tool.annotations?.readOnlyHint === true,
-        });
-      }
+    this.routes = undefined;
+    const entries: Array<{ server: Connected; tool: Tool; fullName: string }> = [];
+    const counts = new Map<string, number>();
+    for (const server of this.servers) {
+      let cursor: string | undefined;
+      const seenCursors = new Set<string>();
+      const seenTools = new Set<string>();
+      do {
+        const page = await server.client.listTools(cursor === undefined ? {} : { cursor });
+        for (const tool of page.tools) {
+          if (seenTools.has(tool.name)) throw new Error(`Duplicate MCP tool: ${server.name}${SEPARATOR}${tool.name}`);
+          seenTools.add(tool.name);
+          const fullName = `${server.name}${SEPARATOR}${tool.name}`;
+          entries.push({ server, tool, fullName });
+          counts.set(fullName, (counts.get(fullName) ?? 0) + 1);
+        }
+        cursor = page.nextCursor;
+        if (cursor !== undefined) {
+          if (seenCursors.has(cursor)) throw new Error(`MCP server "${server.name}" repeated a tools cursor.`);
+          seenCursors.add(cursor);
+        }
+      } while (cursor !== undefined);
     }
+
+    const routes = new Map<string, { client: Client; toolName: string }>();
+    const specs: ToolSpec[] = [];
+    for (const { server, tool, fullName } of entries) {
+      let name = fullName;
+      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(name) || counts.get(fullName)! > 1) {
+        const hash = createHash("sha256").update(JSON.stringify([server.name, tool.name])).digest("hex").slice(0, 16);
+        name = `${fullName.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 47)}_${hash}`;
+      }
+      if (routes.has(name)) throw new Error(`MCP tool name collision: ${name}`);
+      routes.set(name, { client: server.client, toolName: tool.name });
+      specs.push({
+        name,
+        description: tool.description ?? "",
+        inputSchema: tool.inputSchema as Record<string, unknown>,
+        readOnly: tool.annotations?.readOnlyHint === true,
+      });
+    }
+    this.routes = routes;
     return specs;
   }
 
   async call(name: string, input: Record<string, unknown>): Promise<string> {
-    const index = name.indexOf(SEPARATOR);
-    const server = this.servers.find((s) => s.name === name.slice(0, index));
-    if (index < 0 || !server) throw new Error(`Unknown tool: ${name}`);
-    // The 64-char limit on names can truncate; resolve back through the server's own list.
-    const { tools } = await server.client.listTools();
-    const prefix = name.slice(index + SEPARATOR.length);
-    const tool = tools.find((t) => t.name === prefix || `${server.name}${SEPARATOR}${t.name}`.slice(0, 64) === name);
-    if (!tool) throw new Error(`Unknown tool: ${name}`);
-    const result = await server.client.callTool({ name: tool.name, arguments: input });
+    if (!this.routes) await this.list();
+    const route = this.routes!.get(name);
+    if (!route) throw new Error(`Unknown tool: ${name}`);
+    const result = await route.client.callTool({ name: route.toolName, arguments: input });
     const text = (Array.isArray(result.content) ? result.content : [])
       .flatMap((block: { type: string; text?: string }) => (block.type === "text" && block.text ? [block.text] : []))
       .join("\n");
@@ -82,6 +111,7 @@ export class McpToolHost implements ToolHost {
   }
 
   async close(): Promise<void> {
+    this.routes = undefined;
     await Promise.allSettled(this.servers.map((s) => s.client.close()));
   }
 }
