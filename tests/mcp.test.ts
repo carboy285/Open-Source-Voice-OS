@@ -1,12 +1,14 @@
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { classify } from "../src/gate/classify.js";
 import { runMcpCli } from "../src/mcp/cli.js";
 import { parseAddArgs, protectSecrets, resolveSecrets, UsageError } from "../src/mcp/config.js";
 import { formatContent, McpManager, type McpConnection, type McpTool } from "../src/mcp/manager.js";
 import { MemorySecretStore } from "../src/secrets/store.js";
+import { WireNames } from "../src/providers/wire-names.js";
 
 describe("parseAddArgs", () => {
   it("parses a stdio server with env", () => {
@@ -125,6 +127,124 @@ function fakeConnection(tools: McpTool[]): McpConnection & { changed?: () => voi
 }
 
 describe("McpManager", () => {
+  it("keeps colliding wire names stable and routes without rediscovering tools", async () => {
+    const shared = "lookup_" + "a".repeat(70);
+    const connections = new Map<string, ReturnType<typeof fakeConnection>>();
+    const lists = vi.fn();
+    const manager = new McpManager({
+      secrets: new MemorySecretStore(),
+      factory: async (server) => {
+        const tools = [
+          { name: shared, inputSchema: {}, annotations: { readOnlyHint: true } },
+          { name: `${shared}_write`, inputSchema: {}, annotations: { readOnlyHint: false } },
+          { name: "a.b", inputSchema: {} },
+          { name: "a__b", inputSchema: {} },
+          { name: "a b", inputSchema: {} },
+          { name: "a_.b", inputSchema: {} },
+          { name: "a._b", inputSchema: {} },
+        ];
+        const connection = fakeConnection(tools);
+        connection.listTools = async () => {
+          lists(server);
+          return tools;
+        };
+        connection.callTool = async (tool) => ({ content: [{ type: "text", text: `${server}:${tool}` }] });
+        connections.set(server, connection);
+        return connection;
+      },
+    });
+    try {
+      const config = { command: "x", args: [], env: {}, enabled: true };
+      await manager.start({ servers: { first: config, second: config } });
+      const tools = await manager.list();
+      const names = new WireNames();
+      const wires = tools.map((tool) => names.wire(tool.name));
+      expect(new Set(wires).size).toBe(tools.length);
+      const reversed = new WireNames();
+      for (const tool of [...tools].reverse()) expect(reversed.wire(tool.name)).toBe(names.wire(tool.name));
+      for (const tool of tools) {
+        const wire = names.wire(tool.name);
+        expect(wire).toMatch(/^[a-zA-Z0-9_-]{1,64}$/);
+        const server = tool.name.split(".")[1]!;
+        expect(await manager.call(wire, {})).toBe(`${server}:${tool.name.slice(`mcp.${server}.`.length)}`);
+        expect(classify(tool).gated).toBe(tool.annotations?.readOnlyHint !== true);
+      }
+      expect(lists).toHaveBeenCalledTimes(2);
+      await manager.remove("first");
+      await expect(manager.call(wires[0]!, {})).rejects.toThrow("not connected");
+      connections.get("second")!.changed?.();
+      await vi.waitFor(() => expect(lists).toHaveBeenCalledTimes(3));
+      expect(await manager.call(wires.at(-1)!, {})).toBe("second:a._b");
+    } finally {
+      await manager.close();
+    }
+  });
+
+  it("follows existing tool pagination and keeps the routes cached", async () => {
+    const connection = fakeConnection([]);
+    const list = vi.spyOn(Client.prototype, "listTools").mockImplementation(async (params) => {
+      const name = params?.cursor ? "second" : "first";
+      return {
+        tools: [{ name, inputSchema: { type: "object" as const }, annotations: { readOnlyHint: name === "first" } }],
+        ...(params?.cursor ? {} : { nextCursor: "page-2" }),
+      };
+    });
+    const call = vi.spyOn(Client.prototype, "callTool").mockImplementation(async (params) => {
+      const result = await connection.callTool(params.name, params.arguments ?? {}, 1000);
+      return { content: result.content?.map((block) => ({ type: "text" as const, text: block.text ?? "" })) ?? [] };
+    });
+    const manager = new McpManager({ secrets: new MemorySecretStore() });
+    try {
+      await manager.start({
+        servers: {
+          paged: {
+            command: process.execPath,
+            args: [join(import.meta.dirname, "fixtures", "echo-server.mjs")],
+            env: {},
+            enabled: true,
+          },
+        },
+      });
+      const tools = await manager.list();
+      expect(tools.map((tool) => [tool.name, classify(tool).gated])).toEqual([
+        ["mcp.paged.first", false],
+        ["mcp.paged.second", true],
+      ]);
+      expect(await manager.call("mcp.paged.second", { q: 1 })).toBe('second:{"q":1}');
+      expect(await manager.call("mcp.paged.first", {})).toBe("first:{}");
+      expect(list).toHaveBeenCalledTimes(2);
+    } finally {
+      await manager.close();
+      list.mockRestore();
+      call.mockRestore();
+    }
+  });
+
+  it("reports a repeated cursor rather than looping", async () => {
+    const list = vi.spyOn(Client.prototype, "listTools").mockResolvedValue({ tools: [], nextCursor: "again" });
+    const manager = new McpManager({ secrets: new MemorySecretStore() });
+    try {
+      await manager.start({
+        servers: {
+          paged: {
+            command: process.execPath,
+            args: [join(import.meta.dirname, "fixtures", "echo-server.mjs")],
+            env: {},
+            enabled: true,
+          },
+        },
+      });
+      expect(manager.status()[0]).toMatchObject({
+        state: "error",
+        error: 'MCP server "paged" repeated a tools cursor.',
+      });
+      expect(list).toHaveBeenCalledTimes(2);
+    } finally {
+      await manager.close();
+      list.mockRestore();
+    }
+  });
+
   it("names tools mcp.<server>.<tool>, prefixes descriptions and gates by annotations", async () => {
     const manager = new McpManager({
       secrets: new MemorySecretStore(),

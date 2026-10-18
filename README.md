@@ -83,8 +83,17 @@ You can also try the engine without a native app:
 
 ```sh
 npx tsx src/cli/main.ts clean "um so first ship the beta second fix the login bug"
-ANTHROPIC_API_KEY=... npx tsx src/cli/main.ts agent "what reminders do I have"
+npx tsx src/cli/main.ts dictate --text "um hello there"
+printf 'um hello there' | npx tsx src/cli/main.ts dictate --stdin
+printf 'what reminders do I have' | npx tsx src/cli/main.ts agent --stdin
 ```
+
+`dictate` and `agent` require exactly one input source: `--text <text>`, `--audio <file.wav>`, or `--stdin`.
+`--stdin` reads piped text and rejects empty input; in an interactive terminal, use `--text` instead.
+Audio input must be an existing mono 16 kHz PCM16 WAV file; Murmur reads it in memory and uses your configured
+local speech engine. Dictation uses your existing personal dictionary and dictation settings. Agent requests use
+your configured model and the usual approval gate; actions needing approval are cancelled without an interactive
+terminal. The `clean "<text>"` command remains available for a quick cleanup and change report.
 
 ## Privacy
 
