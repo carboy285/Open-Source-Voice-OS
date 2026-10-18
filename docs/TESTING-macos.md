@@ -155,7 +155,7 @@ Use the left Option key for ⌃⌥A: Right Option is the dictation hotkey.
 
 | #   | Do                                                                                    | Expect                                                                                                                       |
 | --- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 9.1 | Settings › General                                                                    | Shows "Version 0.2.1" and a Check for Updates button                                                                         |
+| 9.1 | Settings › General                                                                    | Shows "Version 0.2.2" and a Check for Updates button                                                                         |
 | 9.2 | Click Check for Updates with no newer release published                               | "Murmur is up to date"                                                                                                       |
 | 9.3 | After a newer release is published, wait up to a minute after launch (or click Check) | A notification and a menu item "Install Murmur x.y.z and Restart"                                                            |
 | 9.4 | Choose Install                                                                        | "Downloading…", then Murmur quits and reopens as the new version. macOS may ask for Accessibility and Input Monitoring again |
