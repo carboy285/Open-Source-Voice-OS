@@ -1,0 +1,13 @@
+Murmur
+Copyright 2026 Murmur contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The installers also ship third-party software under its own license:
+
+- Node.js runtime (MIT License), copied unmodified from nodejs.org.
+  Its license is installed next to it as NODE-LICENSE.
+- NAudio (MIT License), used by the Windows app for microphone capture.
+- npm dependencies bundled into the core (see THIRD-PARTY.txt next to
+  murmur-core.mjs): @anthropic-ai/sdk (MIT), @modelcontextprotocol/sdk (MIT),
+  zod (MIT) and their dependencies.

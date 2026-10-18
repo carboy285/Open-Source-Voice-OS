@@ -1,0 +1,107 @@
+# Murmur
+
+Murmur is a voice layer for macOS and Windows: hold a key, speak, and cleaned-up text appears in whatever app you are using. Hold a second key to ask for something instead, and Murmur carries it out through connectors and MCP servers, showing you a preview before anything is sent, booked or changed.
+
+## Requirements
+
+- macOS 13 or later (Apple silicon or Intel), or Windows 10 1809 or later (x64)
+- A speech model for [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (`whisper-cli` plus a `ggml-*.bin` model file). Speech recognition runs on your computer.
+- For the agent: an Anthropic API key, or any server with an OpenAI-compatible `/v1/chat/completions` endpoint (a local model server works)
+- To build from source: Node.js 22, plus Xcode 15 or later on macOS, or the .NET 8 SDK on Windows
+
+## Install
+
+Download the latest installer from the [Releases page](https://github.com/carboy285/open-source-voice-os/releases):
+
+- macOS: `Murmur-<version>-macos-universal.dmg`. Open it and drag Murmur to Applications.
+- Windows: `Murmur-<version>-windows-x64-setup.exe`. It installs to Program Files and adds a Start menu entry. You can choose to start Murmur at sign-in and to add the `murmur` command to PATH.
+
+Both installers include the Murmur engine and its Node.js runtime, so you don't need Node installed.
+
+### Unsigned builds
+
+Release builds are signed only when the project's signing certificates are configured. Builds from CI artifacts or from your own machine are unsigned.
+
+- macOS: the first time, right-click Murmur in Applications and choose Open, then Open again. If macOS still blocks it, go to System Settings › Privacy & Security and click Open Anyway.
+- Windows: SmartScreen may say "Windows protected your PC". Click More info, then Run anyway.
+
+### Build from source
+
+Clone the repository and build the engine first:
+
+```sh
+npm ci
+npm test
+npm run bundle:core      # writes build/core/murmur-core.mjs
+```
+
+macOS app and disk image:
+
+```sh
+cd native/macos && swift build          # debug build of the menu-bar app
+cd ../.. && scripts/package-macos.sh    # universal Murmur.app and build/installers/*.dmg
+```
+
+To run the debug build against your checkout, point it at the engine:
+`MURMUR_CORE=$PWD/build/core/murmur-core.mjs MURMUR_NODE=$(which node) native/macos/.build/debug/Murmur`.
+Without an app bundle and its Info.plist, macOS cannot ask for microphone access, so use `package-macos.sh` for everyday use.
+
+Windows app and installer (PowerShell):
+
+```powershell
+dotnet build native/windows/Murmur.sln     # the tray app
+./scripts/package-windows.ps1              # build/installers/*-setup.exe (needs Inno Setup 6)
+```
+
+## Quick start
+
+1. Open Murmur. The first-run window asks for the microphone, and on macOS for Accessibility (to type into apps and to see the hotkey).
+2. In Settings › Dictation, choose the `whisper-cli` program and a model file.
+3. Click into any text field, hold Right Option (macOS) or Right Alt (Windows), speak, and let go. A small card shows what changed: fillers removed, spellings fixed, dictionary words applied.
+4. To use the agent, add a model in Settings › Agent. Then hold the same key with Shift and say something like "remind me to call Ana at 3". Murmur shows a preview with Edit, Cancel and the action button. Nothing runs until you press it.
+5. Hold the key with Command (macOS) or Ctrl (Windows) while text is selected to rewrite the selection by voice.
+
+Add an MCP server from a terminal:
+
+```sh
+murmur add mcp notes -- npx -y @example/notes-mcp-server
+murmur add mcp tracker --url https://mcp.example.com/mcp --header "Authorization=Bearer <token>"
+murmur list mcp
+murmur remove mcp notes
+```
+
+Tokens and keys passed with `--env` or `--header` are moved into the system keychain; the config file keeps only a reference. On macOS the command lives at `/Applications/Murmur.app/Contents/Resources/core/murmur` (link it into your PATH). On Windows, tick "Add the murmur command to PATH" in the installer.
+
+You can also try the engine without a native app:
+
+```sh
+npx tsx src/cli/main.ts clean "um so first ship the beta second fix the login bug"
+ANTHROPIC_API_KEY=... npx tsx src/cli/main.ts agent "what reminders do I have"
+```
+
+## Privacy
+
+- Audio stays in memory and is never written to disk, locally or anywhere else.
+- Transcripts are kept on your device only if you turn on Settings › Privacy › Keep transcripts. It is off by default.
+- Murmur has no servers. The only network calls go to providers you configure (your model API, your search provider, services you connect).
+- Keys and tokens live in macOS Keychain or Windows Credential Manager, never in files or the database.
+- Anything that sends, books, changes or deletes something waits for your approval in a preview built by Murmur, not by the model.
+- Settings › Privacy › Delete all Murmur data removes the database, saved keys and the MCP config.
+
+Details are in [docs/PRIVACY.md](docs/PRIVACY.md).
+
+## Architecture
+
+- **Core** (`src/`, TypeScript on Node 22): dictation cleanup, the agent loop and approval gate, connectors, the MCP client, reminders, SQLite storage and the English and Japanese UI strings. It runs headless.
+- **Shells** (`native/macos` in Swift and SwiftUI, `native/windows` in C# and WPF): hotkeys, microphone, text insertion, screen context, keychain, notifications and every window.
+- **Protocol**: the shell starts the core (`murmur daemon`) and both sides talk newline-delimited JSON-RPC 2.0 over stdio. The method table is in `src/rpc/daemon.ts` and `docs/spec/platform.md`.
+
+Behavior is specified in [docs/spec](docs/spec). To write a connector, see [docs/CONNECTORS.md](docs/CONNECTORS.md). To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+## Disclaimer
+
+Murmur is an independent open-source project. It is not affiliated with, endorsed by or connected to WakoAI, Inc. or its VoiceOS product.
