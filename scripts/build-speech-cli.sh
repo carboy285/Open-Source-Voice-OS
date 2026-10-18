@@ -5,6 +5,7 @@
 set -euo pipefail
 
 # whisper.cpp 1.9.5 with Parakeet support. Bump deliberately and re-test dictation when changing it.
+# macOS 13.3 is the floor: ggml calls cblas_sgemm, which Accelerate added in 13.3.
 WHISPER_CPP_COMMIT="0c7be696371069e0baa2515ed7aa08d5a5473aa6"
 TOOLS=(parakeet-cli whisper-cli)
 
@@ -32,7 +33,7 @@ for arch in arm64 x86_64; do
   cmake -S "$WORK/src" -B "$WORK/build-$arch" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_OSX_ARCHITECTURES="$arch" \
-    -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+    -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3 \
     -DBUILD_SHARED_LIBS=OFF \
     -DGGML_NATIVE=OFF \
     -DGGML_METAL=ON \

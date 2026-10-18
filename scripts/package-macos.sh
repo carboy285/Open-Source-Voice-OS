@@ -97,7 +97,7 @@ printf '{"info":{"version":1,"author":"murmur"}}\n' > "$XCASSETS/Contents.json"
   printf '],"info":{"version":1,"author":"murmur"}}\n'
 } > "$APPICONSET/Contents.json"
 if xcrun actool "$XCASSETS" --compile "$APP/Contents/Resources" --platform macosx \
-  --minimum-deployment-target 13.0 --app-icon AppIcon --output-partial-info-plist "$WORK/assets-info.plist" >/dev/null; then
+  --minimum-deployment-target 13.3 --app-icon AppIcon --output-partial-info-plist "$WORK/assets-info.plist" >/dev/null; then
   /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" "$APP/Contents/Info.plist" 2>/dev/null ||
     /usr/libexec/PlistBuddy -c "Set :CFBundleIconName AppIcon" "$APP/Contents/Info.plist"
 else

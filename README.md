@@ -4,7 +4,7 @@ Murmur is a voice layer for macOS and Windows: hold a key, speak, and cleaned-up
 
 ## Requirements
 
-- macOS 13 or later (Apple silicon or Intel), or Windows 10 1809 or later (x64)
+- macOS 13.3 or later (Apple silicon or Intel), or Windows 10 1809 or later (x64)
 - A speech model, downloaded from inside the app: NVIDIA Parakeet TDT 0.6B v3 (about 680 MB for the recommended size). It's saved in `~/Library/Application Support/Murmur/models` and runs on your Mac through whisper.cpp's `parakeet-cli`, which ships inside Murmur.app. Parakeet covers English and 24 other European languages. For Japanese, switch the engine to whisper.cpp in Settings › Dictation and choose a whisper model file.
 - For the agent: an Anthropic API key, or any server with an OpenAI-compatible `/v1/chat/completions` endpoint (a local model server works)
 - To build from source: Node.js 22, plus Xcode 15 or later on macOS, or the .NET 8 SDK on Windows
