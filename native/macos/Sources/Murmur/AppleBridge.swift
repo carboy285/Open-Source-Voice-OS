@@ -16,6 +16,7 @@ enum AppleBridge {
         case "calendar": calendar(action, args, reply)
         case "reminders": reminders(action, args, reply)
         case "mail": mail(action, args, reply)
+        case "computer": ComputerBridge.call(action: action, args: args, reply: reply)
         default: reply(.failure(fail("Unknown service \(service).")))
         }
     }

@@ -160,6 +160,18 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 6. Settings › Connectors › Coding agents: the run shows its latest message and a Stop button; Stop ends it. A notification arrives when an agent finishes.
 7. Repeat steps 2 to 3 with OpenCode and Claude Code (Claude Code needs `claude auth login` first).
 
+### 4.8 Open things and use apps (Computer)
+
+1. Settings › Connectors › Computer is on. If Accessibility is not allowed it says so; allow it.
+2. Say "Find my <a file you have> and open it." The search runs without asking; an approval then shows the full path. Approve: the file opens in its usual app.
+3. Say "Open Notes", then "Quit Notes". Each shows an approval; Notes opens, then quits (it asks about unsaved work itself).
+4. Open Notes and say "Look at Notes and click New Note." The reply works from what is on screen. The approval says what will be clicked in plain words, for example Click the button "New Note" in Notes. Approve: a note is made.
+5. Say "Type hello into Notes." An approval shows the exact text. Approve: it appears in the note. Try it with a password field open: it refuses.
+6. Say "In Notes choose File, New Note." (a menu path). Approve: it happens.
+7. Ask it to click "Approve" on a Murmur preview, to type in Terminal, or to open System Settings and click: each is refused.
+8. Say "Open a .sh file in my Downloads": refused.
+9. With a Composio key set (Settings › Apps), say "Search the web for today's top news." It answers with no preview and no extra sign-in.
+
 ## 5. MCP
 
 ```sh

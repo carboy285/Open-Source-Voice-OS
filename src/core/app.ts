@@ -264,7 +264,21 @@ export class MurmurCore {
     });
   }
 
+  /** Switches a new connector on once for people who already saved their own list. After that it is their call. */
+  private offerNewConnectors(): void {
+    const offered = new Set(this.settings.get("connectors.offered"));
+    const enabled = new Set(this.settings.get("connectors.enabled"));
+    for (const id of ["computer"]) {
+      if (offered.has(id)) continue;
+      enabled.add(id);
+      offered.add(id);
+    }
+    this.settings.set("connectors.enabled", [...enabled]);
+    this.settings.set("connectors.offered", [...offered]);
+  }
+
   async start(): Promise<void> {
+    this.offerNewConnectors();
     this.prune();
     this.scheduler.start();
     await this.reloadMcp();

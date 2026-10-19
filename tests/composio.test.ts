@@ -80,6 +80,18 @@ function setup(opts: { signedIn?: boolean; withKey?: boolean; neverFinishes?: bo
       return json({
         items: active || opts.signedIn ? [{ id: "ca_1", status: "ACTIVE", toolkit: { slug: "googlecalendar" } }] : [],
       });
+    if (path === "/api/v3/tools" && url.searchParams.get("toolkit_slug") === "composio_search")
+      return json({
+        items: [
+          {
+            slug: "COMPOSIO_SEARCH_WEB",
+            name: "Web search",
+            description: "Search the web",
+            input_parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+          },
+          { slug: "COMPOSIO_SEARCH_FLIGHTS", name: "Flights", description: "Find flights", input_parameters: {} },
+        ],
+      });
     if (path === "/api/v3/tools")
       return json({
         items: [
@@ -158,10 +170,41 @@ describe("ComposioService", () => {
 });
 
 describe("ComposioHost", () => {
-  it("offers only the connect tools until an app is connected", async () => {
+  const searchNames = ["composio.composio_search_web", "composio.composio_search_flights"];
+
+  it("offers the connect tools and web search until an app is connected", async () => {
     const { service } = setup();
     const names = (await new ComposioHost(service).list()).map((s) => s.name);
-    expect(names).toEqual(["connections.connect", "connections.list"]);
+    expect(names).toEqual(["connections.connect", "connections.list", ...searchNames]);
+  });
+
+  it("searches the web with Composio's search tool: no sign-in, no preview, and no account sent", async () => {
+    const { service, calls } = setup();
+    const host = new ComposioHost(service);
+    const search = (await host.list()).find((s) => s.name === "composio.composio_search_web");
+    expect(search?.effects).toEqual({ readOnly: true });
+    const llm = new ScriptedLlm([
+      { text: "", toolCalls: [toolCall("1", "composio.composio_search_web", { query: "weather in Tokyo" })] },
+      { text: "It is sunny.", toolCalls: [] },
+    ]);
+    const ui = new ScriptedApprovalUi([]);
+    const result = await runAgent("weather in Tokyo", llm, host, new ApprovalGate(ui));
+    expect(result.status).toBe("done");
+    expect(ui.shown).toHaveLength(0);
+    const exec = calls.find((c) => c.path.includes("/tools/execute/COMPOSIO_SEARCH_WEB"));
+    expect(exec?.body).toMatchObject({ arguments: { query: "weather in Tokyo" } });
+    expect(exec?.body).not.toHaveProperty("connected_account_id");
+  });
+
+  it("offers no search without a Composio key, and none when it is switched off", async () => {
+    const none = setup({ withKey: false });
+    expect(await new ComposioHost(none.service).list()).toHaveLength(2);
+    const off = setup();
+    off.service.configure("composio_search", { enabled: false });
+    expect((await new ComposioHost(off.service).list()).map((s) => s.name)).toEqual([
+      "connections.connect",
+      "connections.list",
+    ]);
   });
 
   it("exposes a connected app's tools, gated by what they do, and runs them with the account", async () => {
@@ -186,7 +229,7 @@ describe("ComposioHost", () => {
     expect((await host.list()).map((s) => s.name)).toContain("composio.googlecalendar_events_list");
     expect((await host.list()).map((s) => s.name)).not.toContain("composio.googlecalendar_create_event");
     service.configure("googlecalendar", { enabled: false });
-    expect((await host.list()).map((s) => s.name)).toEqual(["connections.connect", "connections.list"]);
+    expect((await host.list()).map((s) => s.name)).toEqual(["connections.connect", "connections.list", ...searchNames]);
   });
 
   it("lets the agent connect an app mid-task and then use its tools", async () => {

@@ -50,6 +50,8 @@ export interface ComposioOptions {
 export const NEEDS_KEY =
   "Murmur isn't linked to Composio yet. Add a Composio API key in Settings > Apps, then ask again.";
 const OUTPUT_LIMIT = 8000;
+/** Composio's search toolkit: web, news and similar searches, with no sign-in. */
+export const SEARCH_TOOLKIT = "composio_search";
 const TOOLS_TTL = 10 * 60_000;
 const CONNECTIONS_TTL = 20_000;
 /** Apps people ask for most, so the agent can offer them before the catalog has loaded. */
@@ -286,7 +288,40 @@ export class ComposioService {
         });
       }
     }
+    out.push(...(await this.searchSpecs()));
     return out;
+  }
+
+  /**
+   * Composio's own search tools. They need no sign-in, only the Composio key, so web search works as soon as the
+   * key is added. Searching changes nothing, so these run without a preview.
+   */
+  private async searchSpecs(): Promise<Array<{ spec: ToolSpec; slug: string; toolkit: string; accountId: string }>> {
+    if (!this.appSettings(SEARCH_TOOLKIT).enabled) return [];
+    const tools = await this.toolsFor(SEARCH_TOOLKIT).catch(() => []);
+    // The toolkit has two dozen tools (travel, shopping, finance). Offer the general ones so the model isn't swamped.
+    const general = (t: ComposioTool) =>
+      /WEB|TAVILY|EXA|DUCK|NEWS|ANSWER|SEARCH/i.test(t.slug.replace(/^COMPOSIO_SEARCH_?/i, "")) ? 0 : 1;
+    return [...tools]
+      .sort((a, b) => general(a) - general(b))
+      .slice(0, 8)
+      .map((tool) => ({
+        slug: tool.slug,
+        toolkit: SEARCH_TOOLKIT,
+        accountId: "",
+        spec: {
+          name: `composio.${tool.slug.toLowerCase()}`,
+          description: `Web search (Composio): ${tool.description || tool.name}`.slice(0, 600),
+          inputSchema: cleanSchema(tool.inputSchema),
+          origin: "builtin" as const,
+          effects: { readOnly: true },
+          preview: {
+            summarize: (input: Record<string, unknown>) => genericSummary(`Search: ${tool.name || tool.slug}`, input),
+            icon: "globe",
+            displayName: "Web search",
+          },
+        },
+      }));
   }
 
   async run(slug: string, input: Record<string, unknown>, accountId: string): Promise<string> {
@@ -302,6 +337,7 @@ export class ComposioService {
     const offer = POPULAR.filter((s) => !connected.includes(s));
     return [
       connected.length ? `Connected: ${connected.join(", ")}.` : "No apps are connected yet.",
+      "Web search is built in.",
       `Can connect: ${offer.join(", ")} and more.`,
     ].join(" ");
   }

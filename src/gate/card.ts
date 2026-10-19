@@ -6,7 +6,7 @@ import { addDays, wallTime } from "../reminders/time.js";
  * input it was given, so the shell only draws it: an event looks like an event, an email like an email. Nothing
  * here comes from the model's own words except the values it filled in, and a shell shows those as plain text.
  */
-export type CardKind = "event" | "email" | "reminder" | "message" | "file" | "agent" | "generic";
+export type CardKind = "event" | "email" | "reminder" | "message" | "file" | "agent" | "computer" | "generic";
 
 export interface CardRow {
   /** Icon id the shell maps to its own symbol: clock, person, pin, text, link, folder, list. */
@@ -124,6 +124,7 @@ export function whenLabel(start: unknown, end: unknown, ctx: CardContext): strin
 
 function kindOf(tool: string, input: Input): CardKind {
   const name = tool.toLowerCase();
+  if (name.startsWith("computer.")) return "computer";
   if (
     /calendar|event|meeting|schedule/.test(name) ||
     (pick(input, "start", "start_time", "start_datetime", "startTime") && pick(input, "title", "summary"))
@@ -206,9 +207,10 @@ export function buildCard(
   }
 
   if (!title) title = clip(summary, 120);
-  if (kind === "generic") {
-    // No special layout: the first few filled-in values, as the model gave them.
-    for (const [key, value] of Object.entries(input).slice(0, 4)) {
+  if (kind === "generic" || kind === "computer") {
+    // No special layout: the first few filled-in values, as the model gave them. An item id means nothing to a person.
+    const shown = Object.entries(input).filter(([key]) => kind === "generic" || key !== "id");
+    for (const [key, value] of shown.slice(0, 4)) {
       const v = Array.isArray(value) ? list(value).join(", ") : typeof value === "object" && value ? "" : text(value);
       if (v) add({ icon: "text", style: "text", label: key.replace(/[_-]+/g, " "), values: [clip(v, 100)] });
     }

@@ -311,5 +311,7 @@
   "settings.agents.title": "Coding agents",
   "settings.agents.missing": "Not found on this Mac.",
   "settings.agents.stop": "Stop",
-  "settings.agents.help": "Murmur can start these agents and show their questions in the notch. Nothing is allowed unless you say yes. Say “ask Codex to…” to start one."
+  "settings.agents.help": "Murmur can start these agents and show their questions in the notch. Nothing is allowed unless you say yes. Say “ask Codex to…” to start one.",
+  "card.kind.computer": "Computer action",
+  "settings.computer.permission": "Needs Accessibility permission to click and type in other apps."
 }

@@ -22,6 +22,8 @@
 | Task history | agent.md | specified | medium | — |
 | Circle to Ask (circle an area, ask AI) | notch.md | implemented on Mac | n/a (Murmur design) | Windows not yet |
 | Control coding agents (Codex, Claude Code, OpenCode) from the notch | notch.md | implemented on Mac; fakes tested, real flows partly unverified | n/a (Murmur design) | Windows not yet |
+| Open files, links and apps; use apps (read, click, type, menus) | notch.md | implemented on Mac (fakes tested); Windows opens files and links only | n/a (Murmur design) | Windows UI control not yet |
+| Web search through Composio | agent.md | implemented | n/a (Murmur design) | |
 | Pictures to the model (vision) | agent.md | implemented (Claude, ChatGPT, opt-in for local servers) | n/a (Murmur design) | — |
 | Reminders | reminders.md | specified | medium | Whether reminders sync to the OS Reminders/Calendar app; ours are local |
 | Privacy guarantees | privacy.md | specified | high | — |

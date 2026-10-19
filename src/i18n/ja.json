@@ -311,5 +311,7 @@
   "settings.agents.title": "コーディングエージェント",
   "settings.agents.missing": "この Mac に見つかりません。",
   "settings.agents.stop": "停止",
-  "settings.agents.help": "Murmur はこれらのエージェントを起動し、質問をノッチに表示できます。あなたが許可しない限り何も実行されません。「Codex に…を頼んで」と話すと起動します。"
+  "settings.agents.help": "Murmur はこれらのエージェントを起動し、質問をノッチに表示できます。あなたが許可しない限り何も実行されません。「Codex に…を頼んで」と話すと起動します。",
+  "card.kind.computer": "コンピューター操作",
+  "settings.computer.permission": "他のアプリをクリック・入力するには「アクセシビリティ」の許可が必要です。"
 }

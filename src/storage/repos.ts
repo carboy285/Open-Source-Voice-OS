@@ -22,7 +22,9 @@ export const DEFAULT_SETTINGS = {
   "agent.maxWallMs": 5 * 60 * 1000,
   "approval.timeoutMs": 10 * 60 * 1000,
   "mcp.callTimeoutMs": 60_000,
-  "connectors.enabled": ["reminders", "files", "write"] as string[],
+  "connectors.enabled": ["reminders", "files", "write", "computer"] as string[],
+  /** Connectors that were switched on for the user once because they are new, so their own choice sticks after. */
+  "connectors.offered": [] as string[],
   "connectors.settings": {} as Record<string, Record<string, unknown>>,
   /** Circle to Ask: hold the circle key and drag around something on the screen. */
   "circle.enabled": true,

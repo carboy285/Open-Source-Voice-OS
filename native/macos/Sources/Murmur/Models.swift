@@ -191,6 +191,7 @@ func symbol(forIcon icon: String) -> String {
     case "cloud": return "icloud"
     case "mcp": return "puzzlepiece.extension"
     case "agent": return "terminal"
+    case "computer": return "desktopcomputer"
     default: return "wrench.and.screwdriver"
     }
 }

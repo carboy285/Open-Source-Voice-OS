@@ -5,6 +5,7 @@ import { remindersConnector } from "./reminders.js";
 import type { AgentHub } from "../agents/hub.js";
 import { agentsConnector } from "./agents.js";
 import { appleConnectors, type NativeCall } from "./apple.js";
+import { computerConnector } from "./computer.js";
 import { calendarConnector } from "./skeletons/calendar.js";
 import { driveConnector } from "./skeletons/drive.js";
 import { gmailConnector } from "./skeletons/gmail.js";
@@ -34,6 +35,7 @@ export function builtinConnectors(
     notionConnector(),
     linearConnector(),
     driveConnector(),
+    computerConnector({ native }),
     ...(native ? appleConnectors(native) : []),
     ...(agents ? [agentsConnector(agents)] : []),
   ];

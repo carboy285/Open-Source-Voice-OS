@@ -75,3 +75,11 @@ When you circle something (or switch on "Include a picture of my window"), Murmu
 ## Coding agents
 
 If you switch on Codex, Claude Code or OpenCode in Settings, Murmur can start them in a folder you name and show their questions in the notch. Murmur runs the agent program already installed on your Mac and talks to it on your computer only. Your task and the agent's messages go to Murmur's own screen; whatever the agent itself sends to its provider is between you and that provider, as when you run it yourself. Murmur never reads the agent's sign-in or keys. Nothing is allowed by default: no answer, a timeout or closing a card is a "no", and a risky command needs a second yes. Murmur never starts agents that act for you in the outside world (such as Cue).
+
+## Using your computer
+
+The Computer connector (on by default, Settings › Connectors) lets the agent open files, links and apps, and on a Mac look at an app's window, press buttons, type and choose menus. Opening, quitting, clicking, typing and key presses each show a preview first and happen only if you approve. Two things are not previewed: looking for a file by name (Spotlight, in your home folder) and reading the names of the buttons and fields in an app's front window. Both are done on your Mac; what they return goes to your own AI provider as part of the request, like the words Murmur reads for Circle to Ask. Password fields are never read or typed into. Murmur's own windows, Terminal-style apps, password managers and System Settings are off limits, so the agent cannot approve its own previews or change your permissions. Nothing here is sent to Murmur or to anyone but your chosen provider.
+
+## Web search through Composio
+
+With a Composio key in Settings › Apps, the agent can search the web with Composio's search tools, which need no sign-in. Your search words go to Composio's servers and to the search services it uses, the same as for your connected apps. Without a Composio key, search uses the provider you chose in Settings › Connectors › Web search, or none.

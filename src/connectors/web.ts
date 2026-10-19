@@ -90,7 +90,10 @@ export function webConnector(backends: Record<string, SearchBackend> = SEARCH_BA
         summarize: (i) => `Search the web for "${clip(str(i.query))}"`,
         async run(input, ctx) {
           const backend = backends[str(ctx.settings.backend)];
-          if (!backend) throw new Error("Choose a search provider in Settings › Connectors › Web search.");
+          if (!backend)
+            throw new Error(
+              "No search provider is set. Use a Composio search tool if you have one, or choose a provider in Settings › Connectors › Web search.",
+            );
           const results = await backend.search(str(input.query), Number(input.count ?? 5), ctx);
           if (!results.length) return "No results.";
           return results.map((r, i) => `${i + 1}. ${r.title}\n${r.url}\n${r.snippet}`).join("\n\n");

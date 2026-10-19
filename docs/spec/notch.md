@@ -49,6 +49,10 @@ Hold the dictation key with Control (Right Option + Control by default) and a fa
 
 When Codex, Claude Code or OpenCode (started from Murmur) stops to ask, the question is an approval card of kind "agent": the agent's name, what it wants (the exact command, file change or question) and the folder. Commands and file changes are allowed or refused exactly as shown and cannot be edited; a question has a text box for the answer. A risky command (deleting files, `sudo`, force-push and the like) asks twice, with a separate confirm step. No answer, a timeout or closing the card is "no". When an agent finishes or fails, a notification says so. Settings › Connectors lists detected agents, their switches, recent runs and a Stop button. Cue and other agents that act for the user in the outside world are not controlled.
 
+## Computer actions
+
+Opening a file, link or app, quitting an app, clicking, typing, pressing keys and choosing a menu item are approval cards of kind "computer". The title is one plain sentence Murmur writes itself ("Click the button "Send" in Mail"); for clicks and typing into a field it names the button or field from the screen reading Murmur did, not from the model's words. A click or type is refused if the item changed since it was read. Murmur's own windows, terminals, password managers and System Settings cannot be controlled, and password fields are never read or typed into.
+
 ## Spoken replies
 
 Agent replies are read aloud with the Mac's own voices when Read replies aloud is on (Settings › Agent): the chosen voice, or the best installed voice for the reply's language, at the chosen speed. Speech stops when the dictation key is pressed, when the typing box opens, when a new request is sent, or from the speaker button on the reply card. Nothing is sent anywhere for speech.

@@ -280,6 +280,12 @@ struct ConnectorSettings: View {
                             if connector.skeleton {
                                 Text(L("settings.connectors.skeleton")).font(.caption).foregroundStyle(.orange)
                             }
+                            if connector.id == "computer", connector.enabled, Permissions.accessibility != .granted {
+                                HStack {
+                                    Text(L("settings.computer.permission")).font(.caption).foregroundStyle(.orange)
+                                    Button(L("settings.circle.allow")) { Permissions.openSettings("Privacy_Accessibility") }
+                                }
+                            }
                             if connector.id == "obsidian" { folderButton(connector.id, key: "vaultPath") }
                             if connector.id == "files" { folderButton(connector.id, key: "roots") }
                             if connector.auth == "oauth2-pkce", connector.enabled {

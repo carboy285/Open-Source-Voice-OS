@@ -27,7 +27,7 @@ describe("registry", () => {
     expect(names).toEqual(["reminders.create", "reminders.list", "reminders.cancel"]);
     registry.disable("reminders");
     await expect(registry.call("reminders.list", {})).rejects.toThrow(/turned off/);
-    expect(registry.catalog()).toHaveLength(10);
+    expect(registry.catalog()).toHaveLength(11);
   });
 
   it("validates input against the schema before running", async () => {
@@ -166,7 +166,9 @@ describe("reminders connector", () => {
 describe("web search", () => {
   it("has no default backend or key", async () => {
     const web = webConnector();
-    await expect(action(web, "search").run({ query: "murmur" }, context())).rejects.toThrow(/Choose a search provider/);
+    await expect(action(web, "search").run({ query: "murmur" }, context())).rejects.toThrow(
+      /No search provider is set/,
+    );
     await expect(action(web, "search").run({ query: "murmur" }, context({ backend: "brave" }))).rejects.toThrow(
       /API key/,
     );
