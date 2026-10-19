@@ -324,5 +324,8 @@
   "settings.approval.full.help": "確認しません。Murmur は先に表示せずに、送信や削除、あらゆるアプリの操作ができます。",
   "settings.approval.full.confirm.title": "フルアクセスをオンにしますか？",
   "settings.approval.full.confirm.body": "Murmur は確認なしで Mac、ファイル、連携アプリを操作します。読み込んだウェブページやメールにだまされて、有害な操作をする可能性があります。いつでも元に戻せます。",
-  "settings.approval.full.confirm.button": "フルアクセスをオンにする"
+  "settings.approval.full.confirm.button": "フルアクセスをオンにする",
+  "indicator.locked_hint": "もう一度キーを押すと停止 · Esc でキャンセル",
+  "settings.double_tap_lock": "キーを2回タップして聞き続ける",
+  "settings.double_tap_lock.help": "キーをすばやく2回タップすると、手を離しても Murmur が聞き続けます。もう一度キーを押すと停止します。"
 }

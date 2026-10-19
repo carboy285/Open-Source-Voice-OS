@@ -181,7 +181,9 @@ struct ListeningContent: View {
 
     /// While the key is held: the mode and how to cancel. After release: the step (transcribing, cleaning…).
     private var line: String {
-        if model.state == .listening { return "\(mode) · \(L("indicator.cancel_hint"))" }
+        if model.state == .listening {
+            return "\(mode) · \(L(model.dictationLocked ? "indicator.locked_hint" : "indicator.cancel_hint"))"
+        }
         return "\(mode) · \(L(model.state.menuKey))"
     }
 

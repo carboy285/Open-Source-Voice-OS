@@ -324,5 +324,8 @@
   "settings.approval.full.help": "Never ask. Murmur can send, delete and use any app on your computer without showing you first.",
   "settings.approval.full.confirm.title": "Turn on Full access?",
   "settings.approval.full.confirm.body": "Murmur will act on your Mac, your files and your connected apps without asking. A web page or email it reads could trick it into doing something harmful. You can change this back at any time.",
-  "settings.approval.full.confirm.button": "Turn on Full access"
+  "settings.approval.full.confirm.button": "Turn on Full access",
+  "indicator.locked_hint": "Press the key again to stop · Esc to cancel",
+  "settings.double_tap_lock": "Tap the dictation key twice to keep listening",
+  "settings.double_tap_lock.help": "Tap the key twice quickly and Murmur keeps listening hands-free. Press the key once more to stop."
 }

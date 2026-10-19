@@ -17,6 +17,7 @@ The user holds a global hotkey and speaks. When they let go, cleaned text appear
 | error | any step fails; a short notice says which step and offers retry with the same audio while it is still in memory (D) | idle |
 
 - A **toggle mode** (tap to start, tap to stop) is a setting, default off (D).
+- **Double-tap lock** (Mac, a setting, default on): two quick taps of the dictation key (each under 0.3 s, the second starting within 0.4 s of the first being let go) lock dictation on. It keeps listening after the key is let go, the notch says to press the key again to stop, and the next press stops and sends it. Esc cancels. The first, short tap is dropped like any accidental tap. It applies to Shift (agent) and Command (edit) presses too, never to Circle to Ask. It does nothing in toggle mode.
 - Audio lives only in memory and is dropped after the transcript is produced or the error notice is dismissed (B-P1, D).
 
 ## Cleanup pipeline

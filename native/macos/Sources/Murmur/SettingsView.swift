@@ -121,6 +121,14 @@ struct DictationSettings: View {
     var body: some View {
         Form {
             Toggle(L("settings.toggle_mode"), isOn: flag(model, "dictation.toggleMode"))
+            Toggle(L("settings.double_tap_lock"), isOn: Binding(
+                get: { UserDefaults.standard.object(forKey: "doubleTapLock") as? Bool ?? true },
+                set: {
+                    UserDefaults.standard.set($0, forKey: "doubleTapLock")
+                    model.hotkey.doubleTapLock = $0
+                }
+            ))
+            Text(L("settings.double_tap_lock.help")).font(.caption).foregroundStyle(.secondary)
             Toggle(L("settings.spoken_punctuation"), isOn: flag(model, "dictation.spokenPunctuation"))
             Toggle(L("settings.learning"), isOn: flag(model, "dictation.learning", default: true))
             SpeechEngineSection(store: model.speech) {

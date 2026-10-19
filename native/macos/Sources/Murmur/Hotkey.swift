@@ -31,6 +31,23 @@ final class HotkeyMonitor {
     private var isDown = false
     private var action: HotkeyAction = .dictate
     var toggleMode = false
+    /// Two quick taps lock dictation on until the key is pressed again.
+    var doubleTapLock = true
+    /// Fires on the main thread when a lock starts or ends, so the notch can say "press again to stop".
+    var onLockChange: ((Bool) -> Void)?
+    private var lock = DoubleTapLock()
+
+    var isLocked: Bool { lock.locked }
+
+    /// Drops a lock, for example when the dictation it belonged to ended or never began.
+    func releaseLock() {
+        guard lock.locked else { return }
+        lock.unlock()
+        isDown = false
+        DispatchQueue.main.async { self.onLockChange?(false) }
+    }
+
+    private var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
 
     var isRunning: Bool { tap != nil }
 
@@ -94,9 +111,10 @@ final class HotkeyMonitor {
                 DispatchQueue.main.async { self.onTypeShortcut?() }
                 return
             }
-            if code == 53, isDown || toggleMode { // Esc
+            if code == 53, isDown || toggleMode || lock.locked { // Esc
                 DispatchQueue.main.async { self.onEscape?() }
                 isDown = false
+                releaseLock()
             }
             return
         }
@@ -129,11 +147,28 @@ final class HotkeyMonitor {
             } else if !isDown {
                 isDown = true
                 self.action = action
-                DispatchQueue.main.async { self.onDown?(action) }
+                // Circle to Ask is a drag, never a lock.
+                switch lock.press(at: now, enabled: doubleTapLock && action != .circle) {
+                case .start:
+                    DispatchQueue.main.async { self.onDown?(action) }
+                case .lock:
+                    DispatchQueue.main.async {
+                        self.onLockChange?(true)
+                        self.onDown?(action)
+                    }
+                case .stop:
+                    // The press that ends a locked dictation. The release after it does nothing.
+                    isDown = false
+                    DispatchQueue.main.async {
+                        self.onLockChange?(false)
+                        self.onUp?()
+                    }
+                }
             }
         } else if isDown, !toggleMode {
             isDown = false
-            DispatchQueue.main.async { self.onUp?() }
+            // A locked dictation keeps listening after the key is let go.
+            if lock.release(at: now) { DispatchQueue.main.async { self.onUp?() } }
         }
     }
 

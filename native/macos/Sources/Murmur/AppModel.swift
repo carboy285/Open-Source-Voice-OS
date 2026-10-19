@@ -60,7 +60,15 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     static let shared = AppModel()
 
     // The notch picks its surface from these four, synchronously, so listening shows in the same frame as the key press.
-    @Published var state: ShellState = .starting { didSet { windows.updateNotch() } }
+    @Published var state: ShellState = .starting {
+        didSet {
+            windows.updateNotch()
+            // A lock belongs to one dictation. When that ends or is cancelled, the next press starts a new one.
+            if state != .listening, hotkey.isLocked { hotkey.releaseLock() }
+        }
+    }
+    /// Dictation was locked on with two quick taps of the key and keeps listening until the key is pressed again.
+    @Published var dictationLocked = false
     @Published var level: Float = 0
     @Published var action: HotkeyAction = .dictate
     @Published var report: [ReportItem] = []
@@ -128,7 +136,12 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         registerCoreHandlers()
         startCore()
         audio.onLevel = { [weak self] value in self?.level = value }
-        hotkey.onDown = { [weak self] action in self?.hotkeyDown(action) }
+        hotkey.onDown = { [weak self] action in
+            // A press that could not start listening must not leave a lock behind.
+            if self?.hotkeyDown(action) == false { self?.hotkey.releaseLock() }
+        }
+        hotkey.onLockChange = { [weak self] locked in self?.dictationLocked = locked }
+        hotkey.doubleTapLock = UserDefaults.standard.object(forKey: "doubleTapLock") as? Bool ?? true
         hotkey.onUp = { [weak self] in self?.hotkeyUp() }
         updater.onFound = { [weak self] version in
             self?.postNotification(title: L("update.available", ["version": version]), body: L("update.notify_body"))
@@ -266,16 +279,18 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
 
     // MARK: Hotkey
 
-    private func hotkeyDown(_ action: HotkeyAction) {
+    /// False when the press did not start listening.
+    @discardableResult
+    private func hotkeyDown(_ action: HotkeyAction) -> Bool {
         // A press during the release tail of the previous recording is ignored.
-        guard state != .starting, !audio.isRecording else { return }
+        guard state != .starting, !audio.isRecording else { return false }
         // Talking over the reply, and the microphone hearing it, are both worse than stopping it.
         speaker.stop()
         closeTyping()
         if action == .circle {
             self.action = action
             beginCircle()
-            return
+            return true
         }
         self.action = action
         pressStarted = Date()
@@ -289,9 +304,10 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         } catch {
             notice = L("error.no_mic")
             showError(L("error.no_mic"))
-            return
+            return false
         }
         core.request("dictation.start")
+        return true
     }
 
     private func hotkeyUp() {

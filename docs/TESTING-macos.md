@@ -182,6 +182,15 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 6. Choose "Full access": a confirmation explains the risk. Cancel leaves the mode unchanged. Confirm, then repeat step 4 with a harmless test: it happens with no card.
 7. Switch back to Ask. In the menu bar, Full access… opens Settings instead of switching straight away.
 
+### 4.10 Double-tap lock
+
+1. Settings › Dictation: "Tap the dictation key twice to keep listening" is on.
+2. Tap Right Option twice quickly and let go. The notch keeps listening and says to press the key again to stop. Talk for several seconds.
+3. Press Right Option once. Dictation stops and the text appears, as for a normal hold.
+4. Lock again, then press Esc: it cancels with nothing typed.
+5. One slow tap, then another a second later: no lock, each is just a short tap.
+6. Hold the key and talk as before: unchanged. Turn the setting off and double-tap: no lock.
+
 ## 5. MCP
 
 ```sh
