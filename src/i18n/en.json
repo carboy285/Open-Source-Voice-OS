@@ -313,5 +313,16 @@
   "settings.agents.stop": "Stop",
   "settings.agents.help": "Murmur can start these agents and show their questions in the notch. Nothing is allowed unless you say yes. Say “ask Codex to…” to start one.",
   "card.kind.computer": "Computer action",
-  "settings.computer.permission": "Needs Accessibility permission to click and type in other apps."
+  "settings.computer.permission": "Needs Accessibility permission to click and type in other apps.",
+  "menu.approvals": "Approvals",
+  "settings.approval.title": "How should Murmur's actions be approved?",
+  "settings.approval.ask": "Ask for approval",
+  "settings.approval.ask.help": "Always show what Murmur will do first, for anything that changes something or acts on your computer.",
+  "settings.approval.auto": "Approve for me",
+  "settings.approval.auto.help": "Only ask for actions that could be risky: sending to other people, deleting, buying, or pressing something like Send.",
+  "settings.approval.full": "Full access",
+  "settings.approval.full.help": "Never ask. Murmur can send, delete and use any app on your computer without showing you first.",
+  "settings.approval.full.confirm.title": "Turn on Full access?",
+  "settings.approval.full.confirm.body": "Murmur will act on your Mac, your files and your connected apps without asking. A web page or email it reads could trick it into doing something harmful. You can change this back at any time.",
+  "settings.approval.full.confirm.button": "Turn on Full access"
 }

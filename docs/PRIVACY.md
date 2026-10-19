@@ -83,3 +83,7 @@ The Computer connector (on by default, Settings › Connectors) lets the agent o
 ## Web search through Composio
 
 With a Composio key in Settings › Apps, the agent can search the web with Composio's search tools, which need no sign-in. Your search words go to Composio's servers and to the search services it uses, the same as for your connected apps. Without a Composio key, search uses the provider you chose in Settings › Connectors › Web search, or none.
+
+## Approval modes
+
+By default Murmur shows you a preview before anything that changes something or acts on your computer. In Settings › General (or the menu bar's Approvals menu) you can choose "Approve for me", which skips the preview for routine actions but still asks about anything that could send to other people, delete, buy or press a button like Send, or "Full access", which never asks. Full access has to be confirmed in Settings. With it on, a web page, email or file that Murmur reads could try to trick it into acting, and nothing would stop it except the limits that always apply: Murmur's own windows, terminals, password managers and System Settings are never controlled. The choice is stored on your Mac and only you can change it.

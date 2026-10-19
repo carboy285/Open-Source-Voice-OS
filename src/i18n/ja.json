@@ -313,5 +313,16 @@
   "settings.agents.stop": "停止",
   "settings.agents.help": "Murmur はこれらのエージェントを起動し、質問をノッチに表示できます。あなたが許可しない限り何も実行されません。「Codex に…を頼んで」と話すと起動します。",
   "card.kind.computer": "コンピューター操作",
-  "settings.computer.permission": "他のアプリをクリック・入力するには「アクセシビリティ」の許可が必要です。"
+  "settings.computer.permission": "他のアプリをクリック・入力するには「アクセシビリティ」の許可が必要です。",
+  "menu.approvals": "承認",
+  "settings.approval.title": "Murmur の操作をどのように承認しますか？",
+  "settings.approval.ask": "毎回確認する",
+  "settings.approval.ask.help": "何かを変更したり、コンピューターを操作したりするときは、必ず先に内容を表示します。",
+  "settings.approval.auto": "おまかせ",
+  "settings.approval.auto.help": "危険かもしれない操作だけ確認します。他の人への送信、削除、購入、「送信」のようなボタンを押す操作などです。",
+  "settings.approval.full": "フルアクセス",
+  "settings.approval.full.help": "確認しません。Murmur は先に表示せずに、送信や削除、あらゆるアプリの操作ができます。",
+  "settings.approval.full.confirm.title": "フルアクセスをオンにしますか？",
+  "settings.approval.full.confirm.body": "Murmur は確認なしで Mac、ファイル、連携アプリを操作します。読み込んだウェブページやメールにだまされて、有害な操作をする可能性があります。いつでも元に戻せます。",
+  "settings.approval.full.confirm.button": "フルアクセスをオンにする"
 }

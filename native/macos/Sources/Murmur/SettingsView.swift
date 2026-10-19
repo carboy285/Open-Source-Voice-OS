@@ -42,6 +42,7 @@ struct GeneralSettings: View {
 
     var body: some View {
         Form {
+            ApprovalModeSection()
             Picker(L("settings.language"), selection: Binding(
                 get: { model.settings["ui.locale"] as? String ?? "system" },
                 set: { model.setLocale($0) }
@@ -64,6 +65,52 @@ struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// How much Murmur asks before it acts: everything, only risky things, or nothing. "Ask" is the default, and
+/// Full access has to be confirmed because it removes the preview for every action.
+struct ApprovalModeSection: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var strings: Strings
+    @State private var confirmFull = false
+
+    private var mode: String {
+        let value = model.settings["approval.mode"] as? String ?? "ask"
+        return value == "auto" || value == "full" ? value : "ask"
+    }
+
+    var body: some View {
+        Section(L("settings.approval.title")) {
+            option("ask", icon: "hand.raised", tint: nil)
+            option("auto", icon: "checkmark.shield", tint: nil)
+            option("full", icon: "exclamationmark.shield", tint: .orange)
+        }
+        .alert(L("settings.approval.full.confirm.title"), isPresented: $confirmFull) {
+            Button(L("settings.approval.full.confirm.button"), role: .destructive) { model.setSetting("approval.mode", "full") }
+            Button(L("approval.cancel"), role: .cancel) {}
+        } message: {
+            Text(L("settings.approval.full.confirm.body"))
+        }
+    }
+
+    private func option(_ value: String, icon: String, tint: Color?) -> some View {
+        Button {
+            if value == "full" && mode != "full" { confirmFull = true } else { model.setSetting("approval.mode", value) }
+        } label: {
+            HStack(alignment: .top, spacing: Space.m) {
+                Image(systemName: icon).frame(width: 24).foregroundStyle(tint ?? Color.primary).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L("settings.approval.\(value)")).font(.body.weight(.medium)).foregroundStyle(tint ?? Color.primary)
+                    Text(L("settings.approval.\(value).help")).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if mode == value { Image(systemName: "checkmark").accessibilityHidden(true) }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(mode == value ? .isSelected : [])
     }
 }
 

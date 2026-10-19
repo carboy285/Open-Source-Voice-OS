@@ -17,6 +17,7 @@ import { vocabularyHint } from "../dictation/dictionary.js";
 import { CorrectionLearner } from "../dictation/learning.js";
 import { categorize, type AppCategory } from "../dictation/tone.js";
 import type { ApprovalUi } from "../gate/gate.js";
+import { parseApprovalMode } from "../gate/safety.js";
 import { resolveLocale, t, type Locale } from "../i18n/index.js";
 import { forgetSecrets, loadConfig, type McpConfig } from "../mcp/config.js";
 import { McpManager, type ConnectionFactory } from "../mcp/manager.js";
@@ -224,6 +225,7 @@ export class MurmurCore {
         { list: () => this.mcp.list(), call: (name, input) => this.mcp.call(name, input) },
       ]),
       approvals: this.options.bridge.approvals,
+      approvalMode: () => parseApprovalMode(this.settings.get("approval.mode")),
       store: this.tasks,
       clock: this.clock,
       saveTranscripts: () => this.settings.get("history.saveTranscripts"),

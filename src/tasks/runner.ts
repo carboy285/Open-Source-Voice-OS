@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { AppContext, Clock, ImageInput, LlmProvider, ToolHost } from "../core/types.js";
 import { systemClock } from "../core/types.js";
 import { ApprovalGate, type ApprovalUi } from "../gate/gate.js";
+import type { ApprovalMode } from "../gate/safety.js";
 import { runAgent, type AgentOutcome } from "../modes/agent.js";
 import type { Conversation } from "../modes/conversation.js";
 import { MemoryTaskStore, type TaskRecord, type TaskStatus, type TaskStore } from "./types.js";
@@ -20,6 +21,8 @@ export interface TaskRunnerOptions {
   llm: () => LlmProvider | undefined | Promise<LlmProvider | undefined>;
   tools: ToolHost;
   approvals: ApprovalUi;
+  /** The user's approval mode (Settings). Defaults to asking about everything. */
+  approvalMode?: () => ApprovalMode;
   store?: TaskStore;
   clock?: Clock;
   saveTranscripts?: () => boolean;
@@ -125,6 +128,7 @@ export class TaskRunner {
     timer.unref?.();
     const gate = new ApprovalGate(this.options.approvals, {
       timeoutMs: limits.approvalTimeoutMs,
+      mode: this.options.approvalMode,
       clock: this.clock,
       timeZone: this.options.timeZone?.(),
       locale: this.options.locale?.(),

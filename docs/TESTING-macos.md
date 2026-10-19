@@ -172,6 +172,16 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 8. Say "Open a .sh file in my Downloads": refused.
 9. With a Composio key set (Settings › Apps), say "Search the web for today's top news." It answers with no preview and no extra sign-in.
 
+### 4.9 Approval modes
+
+1. Settings › General shows "How should Murmur's actions be approved?" with Ask for approval selected. The menu bar has an Approvals menu with the same choices.
+2. With Ask selected, say "Remind me to call Mum tomorrow at 5." An approval appears (as before).
+3. Choose "Approve for me" and repeat: the reminder is added with no card, and it shows as a step in the task panel.
+4. Still on "Approve for me", say "Email <someone> that I'm late" (needs a connected mail app) or "Delete <a test file>": an approval appears each time.
+5. In Notes, say "Open Notes and type hello." No card. Then say "In Mail, click Send": a card appears.
+6. Choose "Full access": a confirmation explains the risk. Cancel leaves the mode unchanged. Confirm, then repeat step 4 with a harmless test: it happens with no card.
+7. Switch back to Ask. In the menu bar, Full access… opens Settings instead of switching straight away.
+
 ## 5. MCP
 
 ```sh

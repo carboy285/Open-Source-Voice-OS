@@ -2,6 +2,7 @@ import type { Clock, ToolCall, ToolSpec } from "../core/types.js";
 import { systemClock } from "../core/types.js";
 import { classify } from "./classify.js";
 import { buildPreview, coerceInput, type Preview } from "./preview.js";
+import { parseApprovalMode, potentiallyUnsafe, type ApprovalMode } from "./safety.js";
 import { validate } from "./schema.js";
 
 export interface ApprovalResponse {
@@ -34,6 +35,11 @@ export interface GateOptions {
   /** IANA zone and locale of the user, for the times on a preview card. */
   timeZone?: string;
   locale?: string;
+  /**
+   * How much the user wants to be asked: "ask" (every gated call), "auto" (only risky ones) or "full" (none).
+   * Read on every call, so a change in Settings applies to the next action. Unknown values mean "ask".
+   */
+  mode?: () => ApprovalMode;
   /** Called on every state change, e.g. to mark a task as waiting_approval. */
   onState?: (callId: string, state: Preview["state"] | FinalDecision) => void;
 }
@@ -56,8 +62,9 @@ function sortKeys(value: unknown): unknown {
 }
 
 /**
- * Invariant: a gated tool runs only after the user approved that exact call and input.
- * Nothing here can be configured to skip the prompt for a gated tool.
+ * Invariant: a gated tool runs only after the user approved that exact call and input, unless the user themselves
+ * chose "Approve for me" (risky calls still ask) or "Full access" in Settings. The mode is the user's setting alone:
+ * the model, a connector or a tool result cannot change it, and anything unrecognised means "ask".
  */
 export class ApprovalGate {
   private readonly timeoutMs: number;
@@ -73,6 +80,11 @@ export class ApprovalGate {
 
   async review(call: ToolCall, spec: ToolSpec, signal?: AbortSignal): Promise<GateOutcome> {
     if (!classify(spec).gated) return { decision: "auto", input: call.input };
+    // The user's own choice of how much to be asked (Settings › Approvals). Without it, everything is shown first.
+    const mode = parseApprovalMode(this.options.mode?.());
+    if (mode === "full" || (mode === "auto" && !potentiallyUnsafe(spec, call.input))) {
+      return { decision: "auto", input: call.input };
+    }
 
     let shown = structuredClone(call.input);
     let state: Preview["state"] = "pending";

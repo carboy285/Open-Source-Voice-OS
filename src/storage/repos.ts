@@ -21,6 +21,8 @@ export const DEFAULT_SETTINGS = {
   "agent.maxSteps": 12,
   "agent.maxWallMs": 5 * 60 * 1000,
   "approval.timeoutMs": 10 * 60 * 1000,
+  /** How much to be asked before Murmur acts: "ask" (everything), "auto" (only risky things) or "full" (nothing). */
+  "approval.mode": "ask" as string,
   "mcp.callTimeoutMs": 60_000,
   "connectors.enabled": ["reminders", "files", "write", "computer"] as string[],
   /** Connectors that were switched on for the user once because they are new, so their own choice sticks after. */
