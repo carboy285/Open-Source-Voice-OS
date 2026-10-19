@@ -123,7 +123,8 @@ final class HotkeyMonitor {
         // People hold the hotkey first and add Shift or Command a moment later. The mode is upgraded
         // while the hold lasts and sticks, so letting go of Shift before the hotkey keeps agent mode.
         if code != keyCode {
-            if isDown, action == .dictate {
+            // A lock is a hold that no longer needs the finger, so Shift, Command or Control still switch its mode.
+            if isDown || lock.locked, action == .dictate {
                 let upgraded = Self.action(for: flags)
                 if upgraded != .dictate {
                     action = upgraded
@@ -147,8 +148,8 @@ final class HotkeyMonitor {
             } else if !isDown {
                 isDown = true
                 self.action = action
-                // Circle to Ask is a drag, never a lock.
-                switch lock.press(at: now, enabled: doubleTapLock && action != .circle) {
+                // Every hold works the same way: dictation, agent, edit and Circle to Ask can all be locked.
+                switch lock.press(at: now, enabled: doubleTapLock) {
                 case .start:
                     DispatchQueue.main.async { self.onDown?(action) }
                 case .lock:

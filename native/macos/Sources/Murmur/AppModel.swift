@@ -64,7 +64,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         didSet {
             windows.updateNotch()
             // A lock belongs to one dictation. When that ends or is cancelled, the next press starts a new one.
-            if state != .listening, hotkey.isLocked { hotkey.releaseLock() }
+            if state != .listening, action != .circle, hotkey.isLocked { hotkey.releaseLock() }
         }
     }
     /// Dictation was locked on with two quick taps of the key and keeps listening until the key is pressed again.
@@ -290,7 +290,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         if action == .circle {
             self.action = action
             beginCircle()
-            return true
+            // An overlay that never appeared (no permission, switched off) must not leave a lock behind.
+            return circleOverlay.isShowing
         }
         self.action = action
         pressStarted = Date()
@@ -436,6 +437,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         circleContext = ContextCapture.capture()
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main else { return }
         circleOverlay.show(on: screen) { [weak self] region in
+            // A locked Circle to Ask is done once the loop is drawn (or was too small).
+            self?.hotkey.releaseLock()
             guard let self, let region else {
                 self?.circleOverlay.hide()
                 return

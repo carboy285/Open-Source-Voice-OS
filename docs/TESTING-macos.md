@@ -189,7 +189,10 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 3. Press Right Option once. Dictation stops and the text appears, as for a normal hold.
 4. Lock again, then press Esc: it cancels with nothing typed.
 5. One slow tap, then another a second later: no lock, each is just a short tap.
-6. Hold the key and talk as before: unchanged. Turn the setting off and double-tap: no lock.
+6. Tap Right Option + Shift twice quickly, speak a request, then press Right Option + Shift once: it runs as an agent request, as for a hold. Do the same with Right Option + Command (edit, with some text selected).
+7. Tap Right Option + Control twice quickly and let go: the Circle sheet stays on the screen. Draw around something with the mouse: it finishes as usual and the lock ends. Lock it again and press the key once: the sheet closes.
+8. Lock dictation, then press Shift: it switches to an agent request.
+9. Hold the key and talk as before: unchanged. Turn the setting off and double-tap: no lock.
 
 ## 5. MCP
 
