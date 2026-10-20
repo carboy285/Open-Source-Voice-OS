@@ -91,3 +91,7 @@ By default Murmur shows you a preview before anything that changes something or 
 ## The conversation view
 
 The chat under the typing box is the same short memory Murmur already keeps for a conversation: your recent requests and its answers, held in memory only. It is not written to disk, it starts over after 30 quiet minutes or when you choose New chat, and it is gone when Murmur quits. It holds the last 40 requests at most. Nothing about it is sent anywhere except the parts the AI is given to follow the conversation, which go to your own AI provider as before.
+
+## Live transcription, shortcuts, writing profiles and translation
+
+Live transcription runs your local speech model on the last few seconds of audio while you hold the key. It is shown on your screen only, never saved, and never sent anywhere. Murmur remembers the last text it typed for two minutes (in memory only) so "change X to Y" and "undo my last dictation" can fix it. Voice shortcuts are saved on your Mac and are kept when transcript history is off, because you wrote them. Writing profiles and translation send the dictated text to your own AI provider, the same way tone polishing already does when you have chosen one; with no provider chosen, profiles do nothing and translation reports that it can't run.

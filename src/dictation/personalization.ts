@@ -135,9 +135,14 @@ export function correctionCommand(
   const match = /^change (.+?) to (.+)$/i.exec(clean);
   return match ? { kind: "replace", from: match[1]!, to: match[2]! } : undefined;
 }
-export function replaceSpokenText(text: string, from: string, to: string): string {
+function spokenExpression(from: string): RegExp {
   const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const expression = new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "giu");
+  return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, "giu");
+}
+/** How many times a spoken phrase occurs in some text, as whole words. */
+export const countSpoken = (text: string, from: string): number => [...text.matchAll(spokenExpression(from))].length;
+export function replaceSpokenText(text: string, from: string, to: string): string {
+  const expression = spokenExpression(from);
   const matches = [...text.matchAll(expression)];
   if (matches.length !== 1)
     throw new PersonalizationError(

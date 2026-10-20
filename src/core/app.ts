@@ -54,6 +54,7 @@ import { ParakeetCppStt } from "../providers/parakeet-cpp.js";
 import {
   PersonalizationError,
   correctionCommand,
+  countSpoken,
   findShortcut,
   replaceSpokenText,
   selectProfile,
@@ -492,6 +493,15 @@ export class MurmurCore {
     return { text: result.text };
   }
 
+  private canCorrectRecent(from: string): boolean {
+    const recent = this.recentDictation;
+    return (
+      Boolean(recent && this.options.bridge.replaceRecent) &&
+      this.clock.now() - recent!.at <= 120000 &&
+      countSpoken(recent!.text, from) === 1
+    );
+  }
+
   private async correctRecent(command: NonNullable<ReturnType<typeof correctionCommand>>): Promise<DictationOutcome> {
     const recent = this.recentDictation;
     if (!recent || this.clock.now() - recent.at > 120000 || !this.options.bridge.replaceRecent)
@@ -556,7 +566,9 @@ export class MurmurCore {
         return { text: "", changes: [], summary: [], category: "general", refused: "secure" };
       }
       const command = correctionCommand(transcript);
-      if (command) {
+      // "Change the meeting to Thursday" is also an ordinary sentence. It is only a correction when there is a recent
+      // dictation that contains exactly that phrase once; otherwise it is typed like any other dictation.
+      if (command && (command.kind === "undo" || this.canCorrectRecent(command.from))) {
         this.lastAudio = undefined;
         return await this.correctRecent(command);
       }

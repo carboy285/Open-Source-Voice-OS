@@ -207,6 +207,24 @@ describe("voice corrections", () => {
     ]);
     expect(s.inserted).toHaveLength(1);
   });
+  it('types "change X to Y" as normal text when there is nothing recent to correct', async () => {
+    const s = setup();
+    // Nothing was dictated before, so this is just a sentence.
+    await s.core.finishDictation({ transcript: "change the meeting to Thursday" });
+    expect(s.inserted).toEqual(["Change the meeting to Thursday."]);
+    expect(s.replacements).toEqual([]);
+    // The phrase is not in the last dictation, or is in it twice: still a sentence.
+    await s.core.finishDictation({ transcript: "change the room to B" });
+    await s.core.finishDictation({ transcript: "Tuesday and Tuesday" });
+    await s.core.finishDictation({ transcript: "change Tuesday to Friday" });
+    expect(s.inserted).toEqual([
+      "Change the meeting to Thursday.",
+      "Change the room to B.",
+      "Tuesday and Tuesday.",
+      "Change Tuesday to Friday.",
+    ]);
+    expect(s.replacements).toEqual([]);
+  });
   it("refuses stale dictation, failed insertion, or a changed field", async () => {
     const s = setup();
     await s.core.finishDictation({ transcript: "Tuesday" });
