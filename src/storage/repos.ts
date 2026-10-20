@@ -59,6 +59,8 @@ export const DEFAULT_SETTINGS = {
   /** A hosted speech service (id from providers/catalog.ts), or "" for the models on this computer. */
   "stt.provider": "" as string,
   "stt.baseUrl": "",
+  /** NVIDIA's hosted speech models are chosen by a Function ID from the model's page on build.nvidia.com. */
+  "stt.functionId": "",
   "stt.model.cloud": "",
   /** The voice for spoken replies: "" for the Mac's own voices, or a hosted service. */
   "tts.provider": "" as string,

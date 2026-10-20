@@ -74,7 +74,13 @@ struct CloudSpeechSection: View {
             }
             if let chosen = service(current) {
                 let ownServer = chosen.id == "custom" || chosen.id == "nvidia"
-                TextField(L("settings.llm.model"), text: setting(model, "stt.model.cloud"), prompt: Text(chosen.defaultModel))
+                if chosen.id == "nvidia-hosted" {
+                    // NVIDIA's hosted models are told apart by this ID rather than by a model name.
+                    TextField(L("settings.cloud_stt.function_id"), text: setting(model, "stt.functionId"), prompt: Text("00000000-0000-0000-0000-000000000000"))
+                    Text(L("settings.cloud_stt.function_help")).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    TextField(L("settings.llm.model"), text: setting(model, "stt.model.cloud"), prompt: Text(chosen.defaultModel))
+                }
                 if ownServer {
                     TextField(L("settings.llm.base_url"), text: setting(model, "stt.baseUrl"), prompt: Text(chosen.url))
                 }

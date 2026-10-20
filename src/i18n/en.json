@@ -458,5 +458,7 @@
   "settings.tts.confirm.title": "Send replies to a hosted voice service?",
   "settings.tts.confirm.body": "From now on the text of each reply that is read aloud is sent to {name}. It uses your own key. You can switch back to this Mac's voices at any time.",
   "settings.tts.confirm.button": "Use it",
-  "tts.cloud_failed": "The hosted voice didn't work, so this Mac's voice read the reply: {error}"
+  "tts.cloud_failed": "The hosted voice didn't work, so this Mac's voice read the reply: {error}",
+  "settings.cloud_stt.function_id": "Function ID",
+  "settings.cloud_stt.function_help": "From the model's page on build.nvidia.com: open the Parakeet model, choose Get API Key, and copy the function ID shown there. Sent with each request along with your key."
 }

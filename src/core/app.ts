@@ -415,6 +415,7 @@ export class MurmurCore {
       const apiKey = await this.secrets.get(sttKeyName(cloud.id));
       // A server you run yourself (custom, NVIDIA's container) needs no key; a hosted one does.
       const ownServer = cloud.id === "custom" || cloud.id === "nvidia";
+      const functionId = this.settings.get("stt.functionId");
       const saved = this.settings.get("stt.baseUrl");
       const url = cloud.id === "custom" ? saved : ownServer ? saved || cloud.url : cloud.url;
       if (!url || (!ownServer && !apiKey)) return undefined;
@@ -423,6 +424,7 @@ export class MurmurCore {
         url,
         model: this.settings.get("stt.model.cloud") || cloud.defaultModel,
         apiKey,
+        functionId,
         fetch: this.options.fetch,
       });
     }

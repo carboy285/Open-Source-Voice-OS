@@ -137,7 +137,7 @@ export const llmKeyName = (provider: string): string =>
 
 // Speech to text
 
-export type SttApi = "openai" | "deepgram" | "elevenlabs" | "nvidia";
+export type SttApi = "openai" | "deepgram" | "elevenlabs" | "nvidia" | "riva";
 
 export interface SttPreset {
   id: string;
@@ -189,6 +189,15 @@ export const STT_PRESETS: readonly SttPreset[] = [
     url: "https://api.mistral.ai/v1/audio/transcriptions",
     defaultModel: "voxtral-mini-latest",
     keyUrl: "https://console.mistral.ai/api-keys",
+  },
+  {
+    // NVIDIA's hosted speech models on build.nvidia.com. They speak gRPC and need your key and the model's Function ID.
+    id: "nvidia-hosted",
+    name: "NVIDIA hosted (build.nvidia.com)",
+    api: "riva",
+    url: "https://grpc.nvcf.nvidia.com:443",
+    defaultModel: "",
+    keyUrl: "https://build.nvidia.com/nvidia/parakeet-ctc-1_1b-asr/api",
   },
   {
     // NVIDIA's speech microservice (Parakeet, Canary) running in a container you run yourself, on port 9000 by default.

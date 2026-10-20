@@ -1,6 +1,8 @@
 import type { Pcm16Audio, SttProvider, TranscribeOptions, Transcript } from "../core/types.js";
 import { describeError, redactSecrets } from "../core/redact.js";
 import type { SttApi } from "./catalog.js";
+import { GrpcError, grpcUnary } from "./grpc.js";
+import { RIVA_RECOGNIZE, decodeRecognize, encodeRecognize } from "./riva.js";
 import { padded, wav } from "./whisper-cpp.js";
 
 export interface CloudSttOptions {
@@ -9,6 +11,8 @@ export interface CloudSttOptions {
   url: string;
   model: string;
   apiKey?: string;
+  /** NVIDIA's hosted models are told apart by a Function ID, sent with each request. */
+  functionId?: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
 }
@@ -55,9 +59,11 @@ export class CloudStt implements SttProvider {
           ? this.elevenlabs
           : this.options.api === "nvidia"
             ? this.nvidia
-            : this.openai;
+            : this.options.api === "riva"
+              ? this.riva
+              : this.openai;
     try {
-      return await run.call(this, file, options, signal);
+      return await run.call(this, file, options, signal, audio);
     } catch (error) {
       if (options.signal?.aborted) throw error;
       throw new Error(describeError(error));
@@ -143,6 +149,47 @@ export class CloudStt implements SttProvider {
       text: text(best.transcript).trim(),
       ...(text(channel.detected_language) ? { language: text(channel.detected_language) } : {}),
     };
+  }
+
+  /**
+   * NVIDIA's hosted speech models: a gRPC call carrying the raw audio, with the key as a Bearer token and the model's
+   * Function ID as a header. Written from NVIDIA's published client settings; not yet run against the live service.
+   */
+  private async riva(
+    _file: Buffer,
+    options: TranscribeOptions,
+    signal: AbortSignal,
+    audio?: Pcm16Audio,
+  ): Promise<Transcript> {
+    if (!this.options.functionId?.trim()) {
+      throw new Error("Add the Function ID from the model's page on build.nvidia.com in Settings › Dictation.");
+    }
+    if (!audio) throw new Error("There is no audio to send.");
+    try {
+      const reply = await grpcUnary({
+        url: this.options.url,
+        path: RIVA_RECOGNIZE,
+        message: encodeRecognize(audio.pcm, audio.sampleRate, nvidiaLanguage(options.language)),
+        metadata: {
+          "function-id": this.options.functionId.trim(),
+          ...(this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : {}),
+        },
+        signal,
+        timeoutMs: this.options.timeoutMs ?? 30_000,
+      });
+      return { text: decodeRecognize(reply) };
+    } catch (error) {
+      if (error instanceof GrpcError) {
+        // 16 is "unauthenticated" and 7 "permission denied": the key. 5 is "not found": the Function ID.
+        if (error.code === 16 || error.code === 7) {
+          throw new Error("NVIDIA didn't accept the key or the Function ID. Check both in Settings › Dictation.");
+        }
+        if (error.code === 5)
+          throw new Error("NVIDIA doesn't know that Function ID. Copy it again from the model's page.");
+        throw new Error(`The speech service said: ${this.scrub(error.message).slice(0, 200)}`);
+      }
+      throw error;
+    }
   }
 
   /**
