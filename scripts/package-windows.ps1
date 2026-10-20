@@ -14,6 +14,8 @@ Get-Content "scripts/node-runtime.env" | Where-Object { $_ -match "^\s*([A-Z0-9_
 $NodeVersion = $runtime["NODE_VERSION"]
 $NodeSha = $runtime["NODE_SHA256_WIN_X64"]
 $Version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+# .NET only accepts up to four numbers in a version (0.2.8.6), so a fifth (0.2.8.6.1) goes in the informational version only.
+$AsmVersion = (($Version -split '\.') | Select-Object -First 4) -join '.'
 
 $Work = Join-Path $Root "build/windows"
 $App = Join-Path $Work "app"
@@ -41,7 +43,7 @@ Copy-Item (Join-Path $nodeDir "node.exe") (Join-Path $App "core/node.exe")
 Copy-Item (Join-Path $nodeDir "LICENSE") (Join-Path $App "core/NODE-LICENSE.txt")
 
 Write-Host "==> Publishing the WPF shell (self-contained)"
-dotnet publish native/windows/Murmur/Murmur.csproj -c Release -r win-x64 --self-contained true -p:Version=$Version -o $App
+dotnet publish native/windows/Murmur/Murmur.csproj -c Release -r win-x64 --self-contained true -p:Version=$AsmVersion -p:InformationalVersion=$Version -o $App
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
 
 Copy-Item build/core/murmur-core.mjs (Join-Path $App "core/murmur-core.mjs")
