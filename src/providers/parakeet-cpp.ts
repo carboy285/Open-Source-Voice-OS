@@ -25,13 +25,14 @@ export class ParakeetCppStt implements SttProvider {
     return args;
   }
 
-  async transcribe(audio: Pcm16Audio, _options: TranscribeOptions = {}): Promise<Transcript> {
+  async transcribe(audio: Pcm16Audio, options: TranscribeOptions = {}): Promise<Transcript> {
     if (!this.options.model) throw new Error("Download a speech model in Settings › Dictation.");
     const { code, stdout, stderr } = await runCli(
       this.options.binary,
       this.args(),
       wav(padded(audio)),
       this.options.timeoutMs ?? 30_000,
+      options.signal,
     );
     if (code !== 0) {
       const reason = stderr.trim().split("\n").filter(Boolean).pop() ?? "";

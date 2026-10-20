@@ -95,6 +95,12 @@ local speech engine. Dictation uses your existing personal dictionary and dictat
 your configured model and the usual approval gate; actions needing approval are cancelled without an interactive
 terminal. The `clean "<text>"` command remains available for a quick cleanup and change report.
 
+## Personalize your voice tools
+
+Open Settings › Personalize to save voice shortcuts, choose a writing profile, or translate dictation into another language. Settings › Dictation controls the local live preview. Say “change Tuesday to Thursday” or “undo my last dictation” within two minutes to correct the last inserted passage while the cursor is still in place.
+
+First-run setup now includes a guided introduction, permission checks, model setup and a practice area. See [Voice tools and guided setup](docs/PERSONALIZATION.md) for usage, limits and acceptance checks.
+
 ## Privacy
 
 - Audio stays in memory and is never written to disk, locally or anywhere else.

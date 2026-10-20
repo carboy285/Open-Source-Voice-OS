@@ -101,7 +101,7 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
         case .hidden:
             return notch
         case .listening:
-            return CGSize(width: max(320, notch.width + 120), height: notch.height + NotchController.listeningExtra)
+            return CGSize(width: max(320, notch.width + 120), height: notch.height + (model.liveTranscript.isEmpty ? NotchController.listeningExtra : 76))
         case .progress:
             return CGSize(width: max(300, notch.width + 120), height: notch.height + NotchController.listeningExtra)
         case .report:

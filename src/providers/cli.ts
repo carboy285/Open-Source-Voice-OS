@@ -41,10 +41,16 @@ export interface CliResult {
 }
 
 /** Runs a speech CLI with the audio on stdin. Rejects only when the process can't start or times out. */
-export function runCli(name: string, args: string[], input: Buffer, timeoutMs: number): Promise<CliResult> {
+export function runCli(
+  name: string,
+  args: string[],
+  input: Buffer,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<CliResult> {
   return new Promise((resolve, reject) => {
     const binary = resolveBinary(name);
-    const child = spawn(binary, args, { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(binary, args, { stdio: ["pipe", "pipe", "pipe"], signal });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {

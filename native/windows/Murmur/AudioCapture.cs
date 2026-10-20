@@ -49,6 +49,15 @@ namespace Murmur
             return Resample(samples, sourceRate);
         }
 
+        public byte[] Preview()
+        {
+            lock (gate)
+            {
+                var start = Math.Max(0, mono.Count - sourceRate * 15);
+                return Resample(mono.GetRange(start, mono.Count - start).ToArray(), sourceRate);
+            }
+        }
+
         private void OnData(object? sender, WaveInEventArgs e)
         {
             if (sender is not WasapiCapture source) return;

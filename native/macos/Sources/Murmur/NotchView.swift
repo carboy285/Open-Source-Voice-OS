@@ -198,17 +198,17 @@ struct ListeningContent: View {
                     .frame(maxWidth: .infinity)
             }
             .frame(height: notch.height)
-            Text(line)
+            Text(model.liveTranscript.isEmpty ? line : model.liveTranscript)
                 .font(.callout.weight(.medium))
                 .foregroundStyle(.white)
-                .lineLimit(1)
+                .lineLimit(model.liveTranscript.isEmpty ? 1 : 3)
                 .minimumScaleFactor(0.8)
                 .padding(.horizontal, Space.l)
-                .frame(height: NotchController.listeningExtra - 4)
+                .frame(height: model.liveTranscript.isEmpty ? NotchController.listeningExtra - 4 : 72)
         }
         .frame(width: width)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(line)
+        .accessibilityLabel(model.liveTranscript.isEmpty ? line : model.liveTranscript)
         .accessibilityAddTraits(.updatesFrequently)
     }
 

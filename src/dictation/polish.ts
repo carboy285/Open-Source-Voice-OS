@@ -12,6 +12,7 @@ export interface PolishOptions {
   /** Give up and keep the input after this many ms. Default 2000. */
   timeoutMs?: number;
   appName?: string;
+  writingInstructions?: string;
 }
 
 /** Largest relative length change accepted from the model. */
@@ -36,6 +37,9 @@ export async function polish(text: string, llm: LlmProvider, options: PolishOpti
   const lines = [
     options.appName ? `The text goes into ${options.appName}.` : "",
     `Style: ${STYLE_RULES[category]}`,
+    options.writingInstructions
+      ? `Personal writing preference (preserve meaning and language): ${options.writingInstructions}`
+      : "",
     options.preserve?.length ? `Keep these spellings exactly: ${options.preserve.join(", ")}` : "",
     `Text:\n${text}`,
   ].filter(Boolean);

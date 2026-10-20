@@ -16,6 +16,13 @@ namespace Murmur
         public readonly CoreClient Core;
         public readonly HotkeyMonitor Hotkey = new();
         public readonly AudioCapture Audio = new();
+        public string LiveTranscript { get; private set; } = "";
+        public bool SetupRecording { get; set; }
+        public bool SetupBusy { get; set; }
+        private readonly DispatcherTimer previewTimer = new() { Interval = TimeSpan.FromSeconds(3) };
+        private bool previewBusy;
+        private int recordingGeneration;
+
 
         public ShellState State { get; private set; } = ShellState.Starting;
         public HotkeyAction Action { get; private set; } = HotkeyAction.Dictate;
@@ -86,6 +93,7 @@ namespace Murmur
                 timer.Start();
             };
             StartCore();
+            previewTimer.Tick += async (_, _) => await PreviewDictation();
             Audio.Level += level => dispatcher.BeginInvoke(() => indicator.SetLevel(level));
             Hotkey.Down += HotkeyDown;
             Hotkey.Up += HotkeyUp;
@@ -113,8 +121,10 @@ namespace Murmur
             Core.Handle("text.insert", async p =>
             {
                 var (ok, method) = await TextInserter.Insert(p.Str("text"));
+                await RecentInsertion.Remember(p.Str("text"), ok);
                 return new JsonObject { ["ok"] = ok, ["method"] = method };
             });
+            Core.Handle("text.replaceRecent", async p => new JsonObject { ["ok"] = await RecentInsertion.Replace(p.Str("expected"), p.Str("replacement")) });
             Core.Handle("context.capture", async _ => await ContextCapture.Capture());
             Core.Handle("secret.get", p => Task.FromResult<JsonNode?>(new JsonObject { ["value"] = CredentialStore.Get(p.Str("key")) }));
             Core.Handle("secret.set", p =>
@@ -175,7 +185,8 @@ namespace Murmur
 
         private void HotkeyDown(HotkeyAction action)
         {
-            if (State == ShellState.Starting) return;
+            if (State == ShellState.Starting || Audio.IsRecording || SetupRecording || SetupBusy) return;
+            StopLivePreview();
             Action = action;
             pressStarted = DateTime.Now;
             reportTimer.Stop();
@@ -193,10 +204,12 @@ namespace Murmur
                 return;
             }
             Core.Send("dictation.start");
+            if (action == HotkeyAction.Dictate && Settings.Bool("dictation.livePreview", true)) previewTimer.Start();
         }
 
         private async void HotkeyUp()
         {
+            StopLivePreview();
             if (State != ShellState.Listening) return;
             var pcm = Audio.Stop();
             Sound.Play(false, SoundOn);
@@ -231,10 +244,32 @@ namespace Murmur
 
         public void CancelListening()
         {
+            StopLivePreview();
             Audio.Stop();
             Core.Send("dictation.cancel");
             SetState(ShellState.Idle);
             indicator.HideAll();
+        }
+
+        private void StopLivePreview()
+        {
+            previewTimer.Stop(); recordingGeneration++; LiveTranscript = "";
+        }
+
+        private async Task PreviewDictation()
+        {
+            if (previewBusy || !Audio.IsRecording || State != ShellState.Listening) return;
+            var generation = recordingGeneration;
+            previewBusy = true;
+            try
+            {
+                var result = await Core.Request("dictation.preview", new JsonObject { ["audio"] = Convert.ToBase64String(Audio.Preview()), ["sampleRate"] = 16000 });
+                if (generation != recordingGeneration || State != ShellState.Listening) return;
+                var text = result.Str("text");
+                if (text.Length > 0) { LiveTranscript = text; indicator.Refresh(); }
+            }
+            catch (Exception) { }
+            finally { previewBusy = false; }
         }
 
         public async void RetryDictation()
@@ -293,11 +328,16 @@ namespace Murmur
                 case "state":
                     var raw = p.Str("state");
                     if (!Enum.TryParse<ShellState>(raw, true, out var next) || next == ShellState.Listening) return;
+                    if (Audio.IsRecording || SetupRecording) return;
                     if (Action == HotkeyAction.Agent && next == ShellState.Done) return;
                     if (next == ShellState.Done && p.Str("message").Length > 0) ShowMessage(p.Str("message"), next, 3);
                     else if (next == ShellState.Error) ShowMessage(p.Str("message"), next, 8);
                     else if (next == ShellState.Idle) FinishQuietly();
                     else SetState(next);
+                    break;
+                case "dictation.task":
+                    Action = HotkeyAction.Agent;
+                    SetState(ShellState.Agent);
                     break;
                 case "dictation.result":
                     Report = (p["summary"] as JsonArray ?? new JsonArray()).Select(s => new ReportItem { Category = s.Str("category"), Count = s.Int("count"), Label = s.Str("label") }).ToList();
@@ -695,7 +735,11 @@ namespace Murmur
 
         public void ShowOnboarding()
         {
-            onboarding ??= new OnboardingWindow(this);
+            if (onboarding == null)
+            {
+                onboarding = new OnboardingWindow(this);
+                onboarding.Closed += (_, _) => onboarding = null;
+            }
             onboarding.Show();
             onboarding.Activate();
         }

@@ -10,6 +10,7 @@ export interface DictationOptions extends Omit<CleanupOptions, "category"> {
   /** When set, the rule-based result is refined by a model that knows the target app. */
   polish?: LlmProvider;
   polishTimeoutMs?: number;
+  writingInstructions?: string;
   /** User overrides for the app → category table. */
   categoryOverrides?: Record<string, AppCategory>;
   /** Categories where the user turned tone adaptation off. */
@@ -36,6 +37,7 @@ export async function processDictation(
     preserve: options.dictionary?.map((e) => e.written),
     timeoutMs: options.polishTimeoutMs,
     appName: context.appName,
+    writingInstructions: options.writingInstructions,
   });
   return {
     text: polished.text,

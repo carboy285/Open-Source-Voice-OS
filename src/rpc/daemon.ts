@@ -57,6 +57,7 @@ export class RpcSecretStore implements SecretStore {
 export function rpcBridge(peer: JsonRpcPeer): ShellBridge & { approvals: RpcApprovalUi } {
   return {
     insertText: (text) => peer.request("text.insert", { text }, 10_000),
+    replaceRecent: (expected, replacement) => peer.request("text.replaceRecent", { expected, replacement }, 10000),
     captureContext: () => peer.request<CapturedContext>("context.capture", {}, 3_000),
     secrets: new RpcSecretStore(peer),
     approvals: new RpcApprovalUi(peer),
@@ -124,6 +125,13 @@ export function registerMethods(peer: JsonRpcPeer, core: MurmurCore, approvals: 
     })
     .handle("dictation.stop", (p) =>
       core.finishDictation({
+        audio: decodeAudio(p),
+        transcript: typeof p.transcript === "string" ? p.transcript : undefined,
+      }),
+    )
+    .handle("dictation.preview", (p) => core.previewDictation(decodeAudio(p)))
+    .handle("setup.practice", (p) =>
+      core.practiceDictation({
         audio: decodeAudio(p),
         transcript: typeof p.transcript === "string" ? p.transcript : undefined,
       }),

@@ -51,6 +51,15 @@ import { findModel } from "../models/catalog.js";
 import { ModelManager } from "../models/manager.js";
 import { ParakeetCppStt } from "../providers/parakeet-cpp.js";
 
+import {
+  PersonalizationError,
+  correctionCommand,
+  findShortcut,
+  replaceSpokenText,
+  selectProfile,
+  translateDictation,
+} from "../dictation/personalization.js";
+
 export const LLM_KEY = "llm/apiKey";
 
 /** What the shell reports from `context.capture`. */
@@ -63,6 +72,7 @@ export type DictationState = "idle" | "listening" | "transcribing" | "cleaning" 
 
 export type CoreEvent =
   | { type: "state"; state: DictationState; step?: string; message?: string }
+  | { type: "dictation.task" }
   | { type: "dictation.result"; text: string; changes: Change[]; summary: ChangeSummary[]; category: AppCategory }
   | ({ type: "task.update" } & TaskUpdate)
   | { type: "notify"; title: string; body: string; kind: "status" | "completion" | "warning" | "error" }
@@ -84,6 +94,7 @@ export interface ChangeSummary {
 export interface ShellBridge {
   insertText(text: string): Promise<{ ok: boolean; method: string; reason?: string }>;
   captureContext(): Promise<CapturedContext>;
+  replaceRecent?(expected: string, replacement: string): Promise<{ ok: boolean }>;
   secrets: SecretStore;
   approvals: ApprovalUi;
   emit(event: CoreEvent): void;
@@ -140,6 +151,10 @@ export class MurmurCore {
   private pendingContext?: Promise<CapturedContext>;
   private dictationStarted = 0;
   private lastAudio?: Pcm16Audio;
+  private recentDictation?: { text: string; at: number };
+  private previewJob?: Promise<{ text: string }>;
+  private previewGeneration = 0;
+  private previewController?: AbortController;
 
   constructor(private readonly options: CoreOptions) {
     this.clock = options.clock ?? systemClock;
@@ -436,18 +451,67 @@ export class MurmurCore {
 
   /** Hotkey down: capture context now, while the user's app is still focused. */
   beginDictation(): void {
+    this.previewController?.abort();
+    this.previewGeneration++;
     this.dictationStarted = this.clock.now();
     this.pendingContext = this.options.bridge.captureContext().catch(() => ({}));
     this.emit({ type: "state", state: "listening" });
   }
 
   cancelDictation(): void {
+    this.previewController?.abort();
+    this.previewGeneration++;
     this.pendingContext = undefined;
     this.lastAudio = undefined;
     this.emit({ type: "state", state: "idle" });
   }
 
-  private async transcribe(audio: Pcm16Audio): Promise<{ text: string; language?: string }> {
+  /** Rolling local preview. Never inserts, polishes, stores text, or starts actions. */
+  async previewDictation(audio?: Pcm16Audio): Promise<{ text: string }> {
+    if (!audio || !this.settings.get("dictation.livePreview") || this.previewJob) return { text: "" };
+    if (audio.sampleRate !== 16000 || audio.pcm.length > 16000 * 2 * 15) return { text: "" };
+    const generation = this.previewGeneration;
+    const controller = new AbortController();
+    this.previewController = controller;
+    const job = this.transcribe(audio, controller.signal)
+      .then((result) => ({ text: generation === this.previewGeneration ? result.text : "" }))
+      .catch(() => ({ text: "" }));
+    this.previewJob = job;
+    try {
+      return await job;
+    } finally {
+      if (this.previewController === controller) this.previewController = undefined;
+      if (this.previewJob === job) this.previewJob = undefined;
+    }
+  }
+
+  /** Setup practice runs the real speech/cleanup pipeline without typing into another app. */
+  async practiceDictation(input: { audio?: Pcm16Audio; transcript?: string }): Promise<{ text: string }> {
+    const transcript = input.transcript ?? (input.audio ? (await this.transcribe(input.audio)).text : "");
+    const result = await processDictation(transcript, {}, { dictionary: this.dictionary.list() });
+    return { text: result.text };
+  }
+
+  private async correctRecent(command: NonNullable<ReturnType<typeof correctionCommand>>): Promise<DictationOutcome> {
+    const recent = this.recentDictation;
+    if (!recent || this.clock.now() - recent.at > 120000 || !this.options.bridge.replaceRecent)
+      throw new PersonalizationError(
+        "voice.no_recent",
+        "No recent dictation to change. Select text and use voice edit instead.",
+      );
+    const text = command.kind === "undo" ? "" : replaceSpokenText(recent.text, command.from, command.to);
+    const result = await this.options.bridge.replaceRecent(recent.text, text);
+    if (!result.ok)
+      throw new PersonalizationError(
+        "voice.moved",
+        "The text or cursor has moved. Select the text and use voice edit instead.",
+      );
+    this.recentDictation = text ? { text, at: this.clock.now() } : undefined;
+    this.emit({ type: "state", state: "done", message: this.t("voice.corrected") });
+    return { text, changes: [], summary: [], category: "general" };
+  }
+
+  private async transcribe(audio: Pcm16Audio, signal?: AbortSignal): Promise<{ text: string; language?: string }> {
     const stt = this.stt();
     if (!stt) throw new StepError("transcribing", this.t("error.no_stt"));
     const languages = this.settings.get("dictation.languages");
@@ -456,6 +520,7 @@ export class MurmurCore {
     if (isSilent(stats)) return { text: "" };
     try {
       const result = await stt.transcribe(audio, {
+        signal,
         prompt: vocabularyHint(this.dictionary.list()) || undefined,
         language: languages.length === 1 ? languages[0] : undefined,
       });
@@ -467,6 +532,9 @@ export class MurmurCore {
 
   /** Hotkey up: transcribe, clean, insert and report. Audio is kept in memory only for a retry after a failed transcription. */
   async finishDictation(input: { audio?: Pcm16Audio; transcript?: string }): Promise<DictationOutcome> {
+    this.previewController?.abort();
+    this.previewGeneration++;
+    await this.previewJob;
     const context = (await (this.pendingContext ??
       this.options.bridge.captureContext().catch(() => ({})))) as CapturedContext;
     this.pendingContext = undefined;
@@ -480,33 +548,60 @@ export class MurmurCore {
         this.emit({ type: "state", state: "transcribing" });
         ({ text: transcript, language } = await this.transcribe(audio));
       }
-      this.lastAudio = undefined;
 
+      if (context.secure) {
+        this.lastAudio = undefined;
+        this.emit({ type: "notify", title: this.t("app.name"), body: this.t("report.secure_field"), kind: "warning" });
+        this.emit({ type: "state", state: "idle" });
+        return { text: "", changes: [], summary: [], category: "general", refused: "secure" };
+      }
+      const command = correctionCommand(transcript);
+      if (command) {
+        this.lastAudio = undefined;
+        return await this.correctRecent(command);
+      }
+      const shortcut = findShortcut(transcript, this.settings.get("voice.shortcuts"));
+      if (shortcut?.kind === "task") {
+        this.lastAudio = undefined;
+        this.emit({ type: "dictation.task" });
+        await this.startTask({ transcript: shortcut.content, context });
+        return { text: "", changes: [], summary: [], category: "general", empty: true };
+      }
       this.emit({ type: "state", state: "cleaning" });
-      const result = await processDictation(transcript, context, {
-        dictionary: this.dictionary.list(),
-        spokenPunctuation: this.settings.get("dictation.spokenPunctuation"),
-        language,
-        polish: await this.llm(),
-        categoryOverrides: this.settings.get("tone.overrides") as Record<string, AppCategory>,
-        toneDisabled: this.settings.get("tone.disabled") as AppCategory[],
-      });
+      const llm = await this.llm();
+      const profile = selectProfile(
+        context,
+        this.settings.get("writing.profiles"),
+        this.settings.get("writing.activeProfile"),
+      );
+      const result = shortcut
+        ? { text: shortcut.content, changes: [], appliedIds: [], category: categorize(context) }
+        : await processDictation(transcript, context, {
+            dictionary: this.dictionary.list(),
+            spokenPunctuation: this.settings.get("dictation.spokenPunctuation"),
+            language,
+            polish: llm,
+            writingInstructions: profile?.instructions,
+            categoryOverrides: this.settings.get("tone.overrides") as Record<string, AppCategory>,
+            toneDisabled: this.settings.get("tone.disabled") as AppCategory[],
+          });
+      if (result.text && this.settings.get("dictation.outputMode") === "translate") {
+        result.text = await translateDictation(result.text, this.settings.get("dictation.targetLanguage"), llm);
+      }
       this.dictionary.recordUses(result.appliedIds);
 
       if (!result.text) {
+        this.lastAudio = undefined;
         this.emit({ type: "state", state: "done", message: this.t("report.didnt_catch") });
         return { text: "", changes: [], summary: [], category: result.category, empty: true };
       }
-      if (context.secure) {
-        this.emit({ type: "notify", title: this.t("app.name"), body: this.t("report.secure_field"), kind: "warning" });
-        this.emit({ type: "state", state: "idle" });
-        return { text: "", changes: [], summary: [], category: result.category, refused: "secure" };
-      }
 
+      this.lastAudio = undefined;
       this.emit({ type: "state", state: "inserting" });
       const inserted = await this.options.bridge
         .insertText(result.text)
         .catch((): { ok: boolean; method: string; reason?: string } => ({ ok: false, method: "none" }));
+      this.recentDictation = inserted.ok ? { text: result.text, at: this.clock.now() } : undefined;
       const notPlaced = !inserted.ok && inserted.reason !== "secure";
       if (notPlaced) {
         this.emit({ type: "notify", title: this.t("app.name"), body: this.t("report.copied"), kind: "warning" });
@@ -529,7 +624,9 @@ export class MurmurCore {
       return { text: result.text, changes: result.changes, summary, category: result.category, inserted };
     } catch (error) {
       const step = error instanceof StepError ? error.step : "cleaning";
-      this.emit({ type: "state", state: "error", step, message: (error as Error).message });
+      const message = error instanceof PersonalizationError ? this.t(error.key) : (error as Error).message;
+      this.emit({ type: "state", state: "error", step, message });
+      if (error instanceof PersonalizationError) throw new StepError(step, message);
       throw error;
     }
   }
@@ -645,6 +742,10 @@ export class MurmurCore {
 
   /** Removes the database, Murmur's keychain entries and the MCP config, then starts fresh. */
   async deleteAll(): Promise<void> {
+    this.recentDictation = undefined;
+    this.previewController?.abort();
+    this.previewGeneration++;
+    await this.previewJob;
     const indexed = this.settings.get("secrets.index");
     const config = await loadConfig(this.mcpPath).catch(() => ({ servers: {} }));
     const known = [LLM_KEY, WEB_SEARCH_KEY, COMPOSIO_KEY, ...this.registry.catalog().map((c) => tokenKey(c.id))];

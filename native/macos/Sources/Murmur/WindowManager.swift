@@ -120,15 +120,18 @@ final class WindowManager: NSObject, NSWindowDelegate {
         onboarding?.makeKeyAndOrderFront(nil)
     }
 
+    var onboardingIsKey: Bool { onboarding?.isKeyWindow ?? false }
+
     var onboardingVisible: Bool { onboarding?.isVisible ?? false }
 
     func closeOnboarding() {
         UserDefaults.standard.set(true, forKey: "onboarded")
         model.stopPermissionPolling()
+        model.cancelSetupPractice()
         onboarding?.close()
     }
 
     func windowWillClose(_ notification: Notification) {
-        if (notification.object as? NSWindow) === onboarding { model.stopPermissionPolling() }
+        if (notification.object as? NSWindow) === onboarding { model.stopPermissionPolling(); model.cancelSetupPractice() }
     }
 }

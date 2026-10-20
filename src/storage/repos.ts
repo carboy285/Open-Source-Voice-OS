@@ -1,3 +1,4 @@
+import { DEFAULT_PROFILES, validatePersonalization, type VoiceShortcut } from "../dictation/personalization.js";
 import type { DictionaryEntry, EntryKind } from "../dictation/dictionary.js";
 import type { CorrectionStore } from "../dictation/learning.js";
 import type { StepRecord } from "../modes/agent.js";
@@ -13,6 +14,12 @@ export const DEFAULT_SETTINGS = {
   "history.retentionDays": 30,
   "tasks.retentionDays": 30,
   "dictation.toggleMode": false,
+  "dictation.livePreview": true,
+  "dictation.outputMode": "original",
+  "dictation.targetLanguage": "en",
+  "voice.shortcuts": [] as VoiceShortcut[],
+  "writing.profiles": DEFAULT_PROFILES,
+  "writing.activeProfile": "",
   "dictation.spokenPunctuation": false,
   "dictation.learning": true,
   "dictation.languages": [] as string[],
@@ -75,6 +82,7 @@ export class SettingsRepo {
   }
 
   set(key: string, value: unknown): void {
+    value = validatePersonalization(key, value);
     this.db.sql
       .prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
       .run(key, JSON.stringify(value));

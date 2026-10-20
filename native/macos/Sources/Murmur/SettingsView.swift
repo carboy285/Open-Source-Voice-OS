@@ -16,6 +16,7 @@ struct SettingsView: View {
         TabView {
             GeneralSettings().tabItem { Label(L("settings.tab.general"), systemImage: "gearshape") }
             DictationSettings().tabItem { Label(L("settings.tab.dictation"), systemImage: "waveform") }
+            PersonalizationSettings().tabItem { Label(L("settings.tab.personalize"), systemImage: "slider.horizontal.3") }
             AgentSettings().tabItem { Label(L("settings.tab.agent"), systemImage: "sparkles") }
             ConnectorSettings().tabItem { Label(L("settings.tab.connectors"), systemImage: "puzzlepiece.extension") }
             AppsSettings().tabItem { Label(L("settings.tab.apps"), systemImage: "square.grid.2x2") }
@@ -129,6 +130,8 @@ struct DictationSettings: View {
                 }
             ))
             Text(L("settings.double_tap_lock.help")).font(.caption).foregroundStyle(.secondary)
+            Toggle(L("voice.live"), isOn: flag(model, "dictation.livePreview", default: true))
+            Text(L("voice.live.help")).font(.caption).foregroundStyle(.secondary)
             Toggle(L("settings.spoken_punctuation"), isOn: flag(model, "dictation.spokenPunctuation"))
             Toggle(L("settings.learning"), isOn: flag(model, "dictation.learning", default: true))
             SpeechEngineSection(store: model.speech) {

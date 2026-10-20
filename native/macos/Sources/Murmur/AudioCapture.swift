@@ -51,6 +51,11 @@ final class AudioCapture {
     }
 
     /// Stops recording right away and returns the audio. The engine stays warm for a while.
+    func preview() -> Data {
+        lock.lock(); defer { lock.unlock() }
+        return Data(samples.suffix(16000 * 2 * 15))
+    }
+
     func stop() -> Data {
         guard isRecording else { return Data() }
         lock.lock()

@@ -9,7 +9,7 @@ using Microsoft.Win32;
 
 namespace Murmur
 {
-    internal sealed class SettingsWindow : Window
+    internal sealed partial class SettingsWindow : Window
     {
         private readonly AppController app;
         private readonly TabControl tabs = new() { Margin = new Thickness(16, 40, 16, 16) };
@@ -34,6 +34,7 @@ namespace Murmur
             tabs.Items.Clear();
             tabs.Items.Add(Tab(L.T("settings.tab.general"), General()));
             tabs.Items.Add(Tab(L.T("settings.tab.dictation"), Dictation()));
+            tabs.Items.Add(Tab(L.T("settings.tab.personalize"), Personalization()));
             tabs.Items.Add(Tab(L.T("settings.tab.agent"), Agent()));
             tabs.Items.Add(Tab(L.T("settings.tab.connectors"), Connectors()));
             tabs.Items.Add(Tab(L.T("settings.tab.apps"), Apps()));
@@ -76,6 +77,8 @@ namespace Murmur
 
         private UIElement Dictation() => Ui.Column(8,
             Toggle(L.T("settings.toggle_mode"), "dictation.toggleMode"),
+            Toggle(L.T("voice.live"), "dictation.livePreview", true),
+            Ui.Text(L.T("voice.live.help"), Theme.Caption, secondary: true),
             Toggle(L.T("settings.spoken_punctuation"), "dictation.spokenPunctuation"),
             Toggle(L.T("settings.learning"), "dictation.learning", true),
             PathRow(L.T("settings.stt.binary"), "stt.binary"),

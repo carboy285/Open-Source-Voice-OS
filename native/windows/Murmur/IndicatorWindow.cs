@@ -21,6 +21,7 @@ namespace Murmur
         private readonly StackPanel cardBody = new();
         private readonly TextBlock label;
         private readonly TextBlock hint;
+        private readonly TextBlock preview;
         private readonly TextBlock statusIcon;
         private readonly Rectangle[] bars;
         private bool capsuleShown, cardShown;
@@ -61,6 +62,11 @@ namespace Murmur
             card.Visibility = Visibility.Collapsed;
 
             var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(12) };
+            preview = Ui.Text("", Theme.Body);
+            preview.MaxHeight = 100;
+            preview.Margin = new Thickness(12);
+            preview.Visibility = Visibility.Collapsed;
+            stack.Children.Add(Surface(preview, 12, new Thickness(4)));
             stack.Children.Add(card);
             stack.Children.Add(capsule);
             Content = stack;
@@ -140,6 +146,9 @@ namespace Murmur
                 ShellState.Done => L.T("menu.state.done"),
                 _ => L.T("indicator.working"),
             };
+            preview.Text = app.LiveTranscript;
+            preview.Visibility = listening && preview.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            ((FrameworkElement)preview.Parent).Visibility = preview.Visibility;
             hint.Text = L.T("indicator.cancel_hint");
             AutomationProperties.SetName(capsule, label.Text);
         }

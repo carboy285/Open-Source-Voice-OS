@@ -69,6 +69,16 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     }
     /// Dictation was locked on with two quick taps of the key and keeps listening until the key is pressed again.
     @Published var dictationLocked = false
+    @Published var liveTranscript = ""
+    @Published var setupRecording = false
+    @Published var setupTranscript = ""
+    @Published var setupError: String?
+    @Published var setupBusy = false
+    @Published var setupInserted = false
+    private var setupLimit: Timer?
+    private var previewTimer: Timer?
+    private var previewBusy = false
+    private var recordingGeneration = UUID()
     /// The conversation shown under the typing box: the core's record of this chat, oldest first.
     @Published var chat: [ChatEntry] = []
     /// The request being worked on now, shown right away with "thinking" under it.
@@ -227,9 +237,14 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     private func registerCoreHandlers() {
         core.handle("text.insert") { params, reply in
             let result = TextInserter.insert(params["text"] as? String ?? "")
+            RecentInsertion.remember(params["text"] as? String ?? "", ok: result.ok)
+            if result.ok, self.windows.onboardingIsKey { self.setupInserted = true }
             var payload: JSONObject = ["ok": result.ok, "method": result.method.rawValue]
             if let reason = result.reason { payload["reason"] = reason }
             reply(.success(payload))
+        }
+        core.handle("text.replaceRecent") { params, reply in
+            reply(.success(["ok": RecentInsertion.replace(expected: params["expected"] as? String ?? "", with: params["replacement"] as? String ?? "")]))
         }
         core.handle("context.capture") { _, reply in reply(.success(ContextCapture.capture())) }
         core.handle("secret.get") { params, reply in
@@ -295,6 +310,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     /// False when the press did not start listening.
     @discardableResult
     private func hotkeyDown(_ action: HotkeyAction) -> Bool {
+        guard !setupRecording, !setupBusy else { return false }
         // A press during the release tail of the previous recording is ignored.
         guard state != .starting, !audio.isRecording else { return false }
         // Talking over the reply, and the microphone hearing it, are both worse than stopping it.
@@ -321,10 +337,12 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             return false
         }
         core.request("dictation.start")
+        startLivePreview()
         return true
     }
 
     private func hotkeyUp() {
+        stopLivePreview()
         if action == .circle {
             // Letting go before drawing cancels; letting go mid-drag still finishes when the mouse is released.
             if circleOverlay.isShowing, !circleOverlay.isDragging { circleOverlay.hide() }
@@ -372,6 +390,67 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         case .circle:
             break
         }
+    }
+
+    private func startLivePreview() {
+        stopLivePreview()
+        guard action == .dictate, settings["dictation.livePreview"] as? Bool ?? true else { return }
+        let generation = recordingGeneration
+        previewTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            guard let self, self.audio.isRecording, !self.previewBusy else { return }
+            self.previewBusy = true
+            self.core.request("dictation.preview", ["audio": self.audio.preview().base64EncodedString(), "sampleRate": 16000], timeout: 35) { [weak self] result in
+                guard let self else { return }
+                self.previewBusy = false
+                guard self.recordingGeneration == generation, self.state == .listening else { return }
+                if case let .success(value) = result, let object = value as? JSONObject, let text = object["text"] as? String, !text.isEmpty {
+                    self.liveTranscript = text
+                    self.windows.updateNotch()
+                }
+            }
+        }
+    }
+
+    private func stopLivePreview() {
+        previewTimer?.invalidate(); previewTimer = nil
+        recordingGeneration = UUID()
+        liveTranscript = ""
+    }
+
+    func toggleSetupPractice() {
+        guard !setupBusy else { return }
+        setupError = nil
+        if setupRecording {
+            setupLimit?.invalidate(); setupLimit = nil
+            let pcm = audio.stop()
+            setupRecording = false
+            setupBusy = true
+            core.request("setup.practice", ["audio": pcm.base64EncodedString(), "sampleRate": 16000], timeout: 60) { [weak self] result in
+                guard let self else { return }
+                self.setupBusy = false
+                switch result {
+                case let .success(value):
+                    self.setupTranscript = (value as? JSONObject)?["text"] as? String ?? ""
+                    if self.setupTranscript.isEmpty { self.setupError = L("setup.no_speech") }
+                case let .failure(error): self.setupError = error.localizedDescription
+                }
+            }
+        } else {
+            guard !audio.isRecording else { return }
+            do {
+                try audio.start(); setupRecording = true; setupTranscript = ""
+                setupLimit = Timer.scheduledTimer(withTimeInterval: 20, repeats: false) { [weak self] _ in
+                    if self?.setupRecording == true { self?.toggleSetupPractice() }
+                }
+            }
+            catch { setupError = L("error.no_mic") }
+        }
+    }
+
+    func cancelSetupPractice() {
+        setupLimit?.invalidate(); setupLimit = nil
+        if setupRecording { _ = audio.stop() }
+        setupRecording = false
     }
 
     // MARK: Typing
@@ -604,6 +683,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     func stopSpeaking() { speaker.stop() }
 
     func cancelListening() {
+        stopLivePreview()
         _ = audio.stop()
         core.request("dictation.cancel")
         state = .idle
@@ -722,6 +802,9 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                 report = []
                 showReport(seconds: 8)
             }
+        case "dictation.task":
+            action = .agent
+            state = .agent
         case "dictation.result":
             report = (params["summary"] as? [JSONObject] ?? []).map {
                 ReportItem(category: $0["category"] as? String ?? "", count: $0["count"] as? Int ?? 0, label: $0["label"] as? String ?? "")

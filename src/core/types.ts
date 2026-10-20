@@ -5,6 +5,7 @@ export interface Pcm16Audio {
 }
 
 export interface TranscribeOptions {
+  signal?: AbortSignal;
   /** Vocabulary hint (whisper "initial prompt"). */
   prompt?: string;
   /** Pinned language code, or undefined to auto-detect. */

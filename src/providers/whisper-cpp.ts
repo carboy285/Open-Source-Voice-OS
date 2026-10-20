@@ -58,11 +58,11 @@ export class WhisperCppStt implements SttProvider {
     if (!this.options.model) throw new Error("Choose a whisper model file in Settings › Speech.");
     const input = wav(padded(audio));
     if (this.suppressNst) {
-      const first = await this.run([...this.args(options), "-sns"], input);
+      const first = await this.run([...this.args(options), "-sns"], input, options.signal);
       if (!UNKNOWN_ARGUMENT.test(first.stderr)) return this.result(first);
       this.suppressNst = false;
     }
-    return this.result(await this.run(this.args(options), input));
+    return this.result(await this.run(this.args(options), input, options.signal));
   }
 
   private result({ code, stdout, stderr }: CliResult): Transcript {
@@ -75,8 +75,8 @@ export class WhisperCppStt implements SttProvider {
     return parseWhisperOutput(stdout, stderr);
   }
 
-  private run(args: string[], input: Buffer): Promise<CliResult> {
-    return runCli(this.options.binary, args, input, this.options.timeoutMs ?? 30_000);
+  private run(args: string[], input: Buffer, signal?: AbortSignal): Promise<CliResult> {
+    return runCli(this.options.binary, args, input, this.options.timeoutMs ?? 30_000, signal);
   }
 }
 
