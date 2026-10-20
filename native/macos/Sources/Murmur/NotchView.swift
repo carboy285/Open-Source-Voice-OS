@@ -300,6 +300,11 @@ struct ReportContent: View {
 
     private var expanded: Bool { controller.reportExpanded }
 
+    /// A reply from the agent, as opposed to a dictation report or an error.
+    private var isAnswer: Bool {
+        model.report.isEmpty && !(model.reportMessage ?? "").isEmpty && model.state != .error
+    }
+
     private var expandable: Bool {
         model.report.count > 1 || (model.reportMessage?.count ?? 0) > 80 || model.undoEntryId != nil
     }
@@ -368,6 +373,18 @@ struct ReportContent: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .accessibilityLabel(expanded ? L("notch.show_less") : L("notch.show_all"))
+            }
+            if isAnswer {
+                // An answer to a request: the arrow opens the conversation, with this answer already in it.
+                Button {
+                    model.openChat()
+                } label: {
+                    Image(systemName: "chevron.down.circle").font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(L("chat.continue"))
+                .help(L("chat.continue"))
             }
             Button {
                 model.dismissReport()

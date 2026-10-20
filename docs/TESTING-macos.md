@@ -204,6 +204,7 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 6. Hold the dictation key with Shift and ask something by voice. The conversation shows the request and the answer too.
 7. Click the up arrow: the box folds back to a single line. Press Esc, reopen with ⌃⌥T: the arrow state is remembered and the earlier messages are still there. Choose New chat: they are cleared.
 8. Menu bar › Open chat opens the box already down.
+9. Ask something by voice so the answer card appears in the notch. It has a down-arrow button beside the close button; click it and the conversation opens with that answer in it.
 
 ## 5. MCP
 

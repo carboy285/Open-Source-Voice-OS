@@ -438,5 +438,6 @@
   "translation.empty": "Translation returned no usable text. Try again.",
   "voice.ambiguous": "That phrase must occur exactly once in your last dictation. Select text and use voice edit instead.",
   "voice.no_recent": "No recent dictation to change. Select text and use voice edit instead.",
-  "voice.moved": "The text or cursor has moved. Select the text and use voice edit instead."
+  "voice.moved": "The text or cursor has moved. Select the text and use voice edit instead.",
+  "chat.continue": "Continue in the conversation"
 }
