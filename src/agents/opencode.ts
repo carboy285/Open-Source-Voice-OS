@@ -112,7 +112,15 @@ class OpenCodeSession implements AdapterHandle {
     if (!created.ok) throw new Error(`OpenCode wouldn't start a session (${created.status}).`);
     this.sessionId = asString(asObject(await created.json()).id);
     if (!this.sessionId) throw new Error("OpenCode didn't start a session.");
-    void this.listen();
+    // Listen before asking: a permission question sent before the stream is open would be lost, and the agent
+    // would wait for an answer nobody could give.
+    await new Promise<void>((open) => {
+      const giveUp = setTimeout(open, 5000);
+      void this.listen(() => {
+        clearTimeout(giveUp);
+        open();
+      });
+    });
     await this.send(this.options.prompt);
   }
 
@@ -153,7 +161,7 @@ class OpenCodeSession implements AdapterHandle {
   }
 
   /** Reads the server-sent event stream until the session ends. */
-  private async listen(): Promise<void> {
+  private async listen(onOpen: () => void): Promise<void> {
     try {
       const res = await fetch(this.url("/event"), { headers: this.headers(), signal: this.abort.signal });
       const reader = res.body?.getReader();
@@ -162,6 +170,8 @@ class OpenCodeSession implements AdapterHandle {
       let buffer = "";
       for (;;) {
         const { value, done } = await reader.read();
+        // The server says hello as soon as it is listening: from here on no event can be missed.
+        onOpen();
         if (done) return;
         buffer += decoder.decode(value, { stream: true });
         let end: number;
@@ -178,6 +188,8 @@ class OpenCodeSession implements AdapterHandle {
       }
     } catch {
       /* aborted on stop */
+    } finally {
+      onOpen();
     }
   }
 

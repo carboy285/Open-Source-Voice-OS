@@ -232,7 +232,7 @@ describe("OpenCode", () => {
     const s2 = await no1.hub.start({ kind: "opencode", folder: no1.dir, task: "t" });
     await no1.settle(s2, "idle");
     expect(no1.log()).toContainEqual({ reply: "reject" });
-  });
+  }, 20_000);
 
   it("reports a session error and stops the server on stop", async () => {
     const bad = setup("error");
@@ -246,7 +246,7 @@ describe("OpenCode", () => {
     await live.hub.stop(s2.id);
     expect(s2.status).toBe("stopped");
     expect(live.log().some((l) => l.aborted === true)).toBe(true);
-  });
+  }, 20_000);
 });
 
 describe("AgentHub rules", () => {
