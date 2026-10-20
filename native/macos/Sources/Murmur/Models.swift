@@ -180,6 +180,46 @@ struct ChatEntry: Identifiable {
     }
 }
 
+/// An AI, speech-to-text or text-to-speech service the core knows how to use, for the pickers in Settings.
+struct ServiceInfo: Identifiable {
+    let id: String
+    let name: String
+    let defaultModel: String
+    let defaultVoice: String
+    let keyUrl: String
+    let url: String
+    /// Runs on this computer, so it needs no key.
+    let local: Bool
+    /// Its usual model can look at pictures.
+    let vision: Bool
+
+    init(_ json: JSONObject) {
+        id = json["id"] as? String ?? ""
+        name = json["name"] as? String ?? id
+        defaultModel = json["defaultModel"] as? String ?? ""
+        defaultVoice = json["defaultVoice"] as? String ?? ""
+        keyUrl = json["keyUrl"] as? String ?? ""
+        url = json["url"] as? String ?? ""
+        local = json["local"] as? Bool ?? false
+        vision = json["vision"] as? Bool ?? false
+    }
+}
+
+struct ProviderCatalog {
+    var llm: [ServiceInfo] = []
+    var stt: [ServiceInfo] = []
+    var tts: [ServiceInfo] = []
+
+    init() {}
+
+    init(_ json: JSONObject) {
+        func list(_ key: String) -> [ServiceInfo] { (json[key] as? [JSONObject] ?? []).map(ServiceInfo.init) }
+        llm = list("llm")
+        stt = list("stt")
+        tts = list("tts")
+    }
+}
+
 struct ReportItem: Identifiable {
     var id: String { category }
     let category: String

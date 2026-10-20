@@ -206,6 +206,18 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 8. Menu bar › Open chat opens the box already down.
 9. Ask something by voice so the answer card appears in the notch. It has a down-arrow button beside the close button; click it and the conversation opens with that answer in it.
 
+### 4.12 Other AI, speech and voice services
+
+Use a key of your own for each service you try. Nothing here is needed to use Murmur.
+
+1. Settings › Agent › Model lists many services (OpenAI, Google Gemini, OpenCode Zen, OpenRouter, Groq, Together, Mistral, DeepSeek, xAI, Fireworks, Cerebras, NVIDIA NIM, Ollama, LM Studio) as well as ChatGPT, Anthropic and "Another server".
+2. Pick one (for example Google Gemini). The model box shows that service's sample model as a hint, a "Get a key" link opens its key page, and no old model name is carried over. Paste a key, press Return: "A key is saved" shows. Ask "What's 12 times 12?" in the typing box: it answers.
+3. Switch to another service and back: each keeps its own key. Choose Ollama (with Ollama running): no key box, and an optional address.
+4. Settings › Dictation › Hosted speech recognition: choose Deepgram (or another). A confirmation says your recordings will be sent to it. Confirm, add a key, dictate: the text appears. Choose "On this Mac" to go back.
+5. Choose "NVIDIA Speech NIM (your own server)" only if you run NVIDIA's speech container (default address http://localhost:9000/v1/audio/transcriptions). Murmur sends it the recording and a language such as en-US. This one has not been tried against a real container yet.
+6. Settings › Agent › Spoken replies › Voice engine: choose ElevenLabs (or OpenAI or Deepgram), confirm, add a key, press Test: the reply is read in that service's voice. Remove the key and press Test again: this Mac's voice reads it and a notice says the hosted voice didn't work.
+7. Settings › Privacy › Delete all data removes every key (check Keychain Access for "Murmur" items).
+
 ## 5. MCP
 
 ```sh

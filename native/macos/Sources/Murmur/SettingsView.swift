@@ -138,6 +138,7 @@ struct DictationSettings: View {
                 pathRow(L("settings.stt.binary"), key: "stt.binary", directories: false)
                 pathRow(L("settings.stt.model"), key: "stt.model", directories: false)
             }
+            CloudSpeechSection()
         }
         .formStyle(.grouped)
     }
@@ -232,40 +233,34 @@ struct PathRow: View {
 struct AgentSettings: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var strings: Strings
-    @State private var apiKey = ""
     @State private var rate = 0.5
     @State private var voices = Speaker.choices()
-    @FocusState private var keyFocused: Bool
 
     private var provider: String { model.settings["llm.provider"] as? String ?? "none" }
 
     var body: some View {
         Form {
-            Picker(L("settings.llm.provider"), selection: Binding(get: { provider }, set: { model.setSetting("llm.provider", $0) })) {
+            Picker(L("settings.llm.provider"), selection: Binding(get: { provider }, set: chooseProvider)) {
                 Text(L("settings.llm.none")).tag("none")
-                Text(L("settings.llm.anthropic")).tag("anthropic")
-                Text(L("settings.llm.openai")).tag("openai-compatible")
                 Text(L("settings.llm.chatgpt")).tag("chatgpt")
+                Text(L("settings.llm.anthropic")).tag("anthropic")
+                ForEach(model.catalog.llm) { Text($0.name).tag($0.id) }
+                Text(L("settings.llm.openai")).tag("openai-compatible")
             }
             if provider == "chatgpt" {
                 TextField(L("settings.llm.model"), text: text(model, "llm.model"))
                 ChatGptSection()
             } else if provider != "none" {
-                TextField(L("settings.llm.model"), text: text(model, "llm.model"))
-                if provider == "openai-compatible" {
-                    TextField(L("settings.llm.base_url"), text: text(model, "llm.baseUrl"))
+                let service = model.catalog.llm.first { $0.id == provider }
+                TextField(L("settings.llm.model"), text: text(model, "llm.model"), prompt: Text(service?.defaultModel ?? ""))
+                if provider == "openai-compatible" || service?.local == true {
+                    TextField(L("settings.llm.base_url"), text: text(model, "llm.baseUrl"), prompt: Text(service?.url ?? ""))
+                }
+                if provider == "openai-compatible" || (service != nil && service?.vision == false) {
                     Toggle(L("settings.llm.vision"), isOn: flag(model, "llm.vision"))
                 }
-                HStack {
-                    SecureField(L("settings.llm.api_key"), text: $apiKey)
-                        .focused($keyFocused)
-                        .onSubmit(commitKey)
-                    Button(L("approval.save"), action: commitKey)
-                }
-                if let error = model.apiKeyError {
-                    Text(error).font(.caption).foregroundStyle(.red)
-                } else if model.apiKeySaved {
-                    Label(L("settings.llm.key_saved"), systemImage: "key.fill").font(.caption).foregroundStyle(.secondary)
+                if service?.local != true {
+                    KeyField(kind: "llm", service: provider, keyUrl: service?.keyUrl ?? "")
                 }
             }
             if !model.llmReady {
@@ -287,6 +282,7 @@ struct AgentSettings: View {
             }
             Section(L("settings.tts.title")) {
                 Toggle(L("settings.tts.enabled"), isOn: flag(model, "tts.enabled", default: true))
+                CloudVoiceRows()
                 Picker(L("settings.tts.voice"), selection: text(model, "tts.voice")) {
                     Text(L("settings.tts.voice.auto")).tag("")
                     ForEach(voices) { Text($0.label).tag($0.id) }
@@ -306,19 +302,16 @@ struct AgentSettings: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear { rate = model.settings["tts.rate"] as? Double ?? 0.5 }
-        .onChange(of: keyFocused) { focused in
-            if !focused { commitKey() }
+        .onAppear {
+            rate = model.settings["tts.rate"] as? Double ?? 0.5
+            model.refreshProviders()
         }
-        .onDisappear(perform: commitKey)
     }
 
-    /// Saves a typed key on Return, when the field loses focus, or when the tab closes, not only on the button.
-    private func commitKey() {
-        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return }
-        model.saveApiKey(key)
-        apiKey = ""
+    /// A new service starts from its own sample model rather than the last service's.
+    private func chooseProvider(_ id: String) {
+        model.setSetting("llm.provider", id)
+        if model.catalog.llm.contains(where: { $0.id == id }) { model.setSetting("llm.model", "") }
     }
 }
 

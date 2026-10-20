@@ -442,11 +442,12 @@ export class MurmurCore {
   /** Every service Murmur can use, for Settings to list. Keys are never part of it. */
   providerCatalog() {
     return {
-      llm: LLM_PRESETS.map(({ id, name, defaultModel, keyUrl, local, vision }) => ({
+      llm: LLM_PRESETS.map(({ id, name, defaultModel, keyUrl, local, vision, chatUrl }) => ({
         id,
         name,
         defaultModel,
         keyUrl,
+        url: chatUrl,
         local: local === true,
         vision: vision === true,
       })),

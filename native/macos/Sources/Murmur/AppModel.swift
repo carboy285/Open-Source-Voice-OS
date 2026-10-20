@@ -112,6 +112,10 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     @Published var panelVisible = false
     @Published var notice: String?
     @Published var apiKeySaved = Keychain.exists("llm/apiKey")
+    /// The AI, speech and voice services Settings can offer, from the core.
+    @Published var catalog = ProviderCatalog()
+    /// Goes up when a key is saved or removed, so the "key saved" labels refresh.
+    @Published var keyRevision = 0
     @Published var apiKeyError: String?
     @Published var chatgpt = ChatGptState()
     @Published var composio = ComposioState()
@@ -287,6 +291,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         restartDelay = 1
         notice = nil
         speech.refresh()
+        refreshProviders()
         let locale = (UserDefaults.standard.string(forKey: "locale")) ?? "system"
         core.request("i18n.strings", ["locale": locale]) { result in
             if case let .success(value) = result, let object = value as? JSONObject,
@@ -677,7 +682,35 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     }
 
     func speakSample() {
-        speaker.speak(L("settings.tts.sample"), voiceId: settings["tts.voice"] as? String ?? "", rate: settings["tts.rate"] as? Double ?? 0.5)
+        speakReply(L("settings.tts.sample"))
+    }
+
+    /// Reads a reply aloud: with the hosted voice when one is chosen, otherwise (or if that fails) with the Mac's own.
+    func speakReply(_ reply: String) {
+        let voiceId = settings["tts.voice"] as? String ?? ""
+        let rate = settings["tts.rate"] as? Double ?? 0.5
+        guard let provider = settings["tts.provider"] as? String, !provider.isEmpty else {
+            speaker.speak(reply, voiceId: voiceId, rate: rate)
+            return
+        }
+        let text = SpeechText.clean(reply, limit: 2400)
+        guard !text.isEmpty else { return }
+        speaker.stop()
+        let ticket = speaker.generation
+        core.request("tts.synthesize", ["text": text], timeout: 45) { [weak self] result in
+            // Something newer started or stopped speaking while the voice was being made.
+            guard let self, self.speaker.generation == ticket else { return }
+            switch result {
+            case let .success(value):
+                if let object = value as? JSONObject, let encoded = object["audio"] as? String,
+                   let data = Data(base64Encoded: encoded), self.speaker.play(data) {
+                    return
+                }
+            case let .failure(error):
+                self.notice = L("tts.cloud_failed", ["error": error.localizedDescription])
+            }
+            self.speaker.speak(reply, voiceId: voiceId, rate: rate)
+        }
     }
 
     func stopSpeaking() { speaker.stop() }
@@ -823,7 +856,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             }
             if !info.isActive {
                 if info.status == "done", previous?.isActive ?? true, !info.reply.isEmpty, settings["tts.enabled"] as? Bool ?? true {
-                    speaker.speak(info.reply, voiceId: settings["tts.voice"] as? String ?? "", rate: settings["tts.rate"] as? Double ?? 0.5)
+                    speakReply(info.reply)
                 }
                 if !info.long, typingOpen, chatExpanded {
                     // The answer is already in the conversation, so no separate report card.
@@ -1024,15 +1057,40 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
     }
 
-    func saveApiKey(_ key: String) {
+    /// Where a service's key is kept. Anthropic and "another server" keep the original single key.
+    static func keyAccount(kind: String, id: String) -> String {
+        if kind == "llm", id == "anthropic" || id == "openai-compatible" || id.isEmpty { return "llm/apiKey" }
+        return "\(kind)/key/\(id)"
+    }
+
+    func hasKey(kind: String, id: String) -> Bool {
+        Keychain.exists(AppModel.keyAccount(kind: kind, id: id))
+    }
+
+    /// Stores a key in the Keychain for one service. The core reads it from there when it needs it.
+    func saveProviderKey(kind: String, id: String, key: String) {
         apiKeyError = nil
+        let account = AppModel.keyAccount(kind: kind, id: id)
         if key.isEmpty {
-            Keychain.delete("llm/apiKey")
-        } else if case let .failure(error) = Keychain.save("llm/apiKey", key) {
+            Keychain.delete(account)
+        } else if case let .failure(error) = Keychain.save(account, key) {
             apiKeyError = L("settings.llm.key_failed", ["error": error.localizedDescription])
         }
         apiKeySaved = Keychain.exists("llm/apiKey")
+        keyRevision += 1
+        refreshStatus()
+    }
+
+    func saveApiKey(_ key: String) {
+        saveProviderKey(kind: "llm", id: settings["llm.provider"] as? String ?? "anthropic", key: key)
         setSetting("llm.provider", settings["llm.provider"] ?? "anthropic")
+    }
+
+    func refreshProviders() {
+        core.request("providers.catalog") { [weak self] result in
+            guard case let .success(value) = result, let json = value as? JSONObject else { return }
+            self?.catalog = ProviderCatalog(json)
+        }
     }
 
     func refreshChatGpt() {
