@@ -327,5 +327,17 @@
   "settings.approval.full.confirm.button": "フルアクセスをオンにする",
   "indicator.locked_hint": "もう一度キーを押すと停止 · Esc でキャンセル",
   "settings.double_tap_lock": "キーを2回タップしてロックする",
-  "settings.double_tap_lock.help": "キーをすばやく2回タップすると、押し続けなくても Murmur が動作し続けます。音声入力、エージェント、編集、Circle to Ask のすべてで使えます（Shift・Command・Control を一緒に押します）。もう一度キーを押すと停止します。"
+  "settings.double_tap_lock.help": "キーをすばやく2回タップすると、押し続けなくても Murmur が動作し続けます。音声入力、エージェント、編集、Circle to Ask のすべてで使えます（Shift・Command・Control を一緒に押します）。もう一度キーを押すと停止します。",
+  "menu.chat": "チャットを開く",
+  "typing.prompt.chat": "Murmur にメッセージ…",
+  "chat.title": "会話",
+  "chat.show": "会話を表示",
+  "chat.hide": "会話を隠す",
+  "chat.empty": "ここに会話が表示されます。Murmur は30分間、または新しいチャットを始めるまで覚えています。",
+  "chat.thinking": "考え中…",
+  "chat.you": "あなた：{text}",
+  "chat.murmur": "Murmur：{text}",
+  "chat.cancelled": "キャンセルしました。",
+  "chat.failed": "うまくいきませんでした。",
+  "chat.no_answer": "完了しました。"
 }

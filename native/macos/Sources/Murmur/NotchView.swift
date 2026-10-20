@@ -468,18 +468,20 @@ struct ApprovalCard: View {
 // MARK: Typing
 
 /// A text box for Ask and Edit, for when you can't or would rather not speak. Return sends, Esc closes.
+/// The down arrow opens it into a conversation: the chat so far under the box, and the box stays for the next message.
 struct TypingContent: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var strings: Strings
     let notch: CGSize
     let width: CGFloat
-    @State private var text = ""
     @FocusState private var fieldFocused: Bool
 
+    private var text: String { model.typingDraft }
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private var prompt: String {
-        model.typingMode == .ask ? L("typing.prompt.ask") : L("typing.prompt.edit")
+        if model.chatExpanded { return L("typing.prompt.chat") }
+        return model.typingMode == .ask ? L("typing.prompt.ask") : L("typing.prompt.edit")
     }
 
     private var hint: String {
@@ -494,18 +496,33 @@ struct TypingContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.m) {
             HStack(spacing: Space.m) {
-                Picker(L("typing.mode"), selection: $model.typingMode) {
-                    Text(L("typing.mode.ask")).tag(TypingMode.ask)
-                    Text(L("typing.mode.edit")).tag(TypingMode.edit)
+                if !model.chatExpanded {
+                    Picker(L("typing.mode"), selection: $model.typingMode) {
+                        Text(L("typing.mode.ask")).tag(TypingMode.ask)
+                        Text(L("typing.mode.edit")).tag(TypingMode.edit)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 150)
+                } else {
+                    Label(L("chat.title"), systemImage: "bubble.left.and.bubble.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 150)
                 Spacer()
                 Button(L("typing.new_chat")) { model.newChat() }
                     .buttonStyle(.plain)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Button {
+                    model.toggleChat()
+                } label: {
+                    Image(systemName: model.chatExpanded ? "chevron.up" : "chevron.down").font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(model.chatExpanded ? L("chat.hide") : L("chat.show"))
+                .help(model.chatExpanded ? L("chat.hide") : L("chat.show"))
                 Button {
                     model.closeTyping()
                 } label: {
@@ -517,7 +534,7 @@ struct TypingContent: View {
                 .accessibilityLabel(L("typing.close"))
             }
             .fadeIn(0)
-            TextField(prompt, text: $text, axis: .vertical)
+            TextField(prompt, text: $model.typingDraft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.title3)
                 .foregroundStyle(.white)
@@ -544,6 +561,10 @@ struct TypingContent: View {
                     .disabled(trimmed.isEmpty)
             }
             .fadeIn(2)
+            if model.chatExpanded {
+                Divider().overlay(NotchPalette.hairline)
+                ChatTranscript()
+            }
         }
         .padding(.horizontal, Space.l)
         .padding(.top, Space.s)
@@ -564,8 +585,116 @@ struct TypingContent: View {
     private func send() {
         guard !trimmed.isEmpty else { return }
         let request = trimmed
-        text = ""
+        model.typingDraft = ""
         model.submitTyping(request)
+    }
+}
+
+/// The conversation so far, oldest at the top and newest at the bottom, scrolled to the latest message.
+struct ChatTranscript: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var strings: Strings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let bottom = "chat-bottom"
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.m) {
+                    if model.chat.isEmpty, model.chatPending == nil {
+                        Text(L("chat.empty"))
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, Space.xl)
+                    }
+                    ForEach(model.chat) { entry in
+                        ChatTurnView(entry: entry)
+                    }
+                    if let pending = model.chatPending {
+                        ChatBubble(text: pending, mine: true)
+                        HStack(spacing: Space.s) {
+                            ProgressView().controlSize(.small)
+                            Text(model.activeTasks.first?.currentStep ?? L("chat.thinking"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    Color.clear.frame(height: 1).id(bottom)
+                }
+                .padding(.vertical, Space.xs)
+            }
+            .frame(height: 260)
+            .onAppear { scroll(proxy, animated: false) }
+            .onChange(of: model.chat.count) { _ in scroll(proxy) }
+            .onChange(of: model.chatPending) { _ in scroll(proxy) }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(L("chat.title"))
+    }
+
+    private func scroll(_ proxy: ScrollViewProxy, animated: Bool = true) {
+        // After the new row has been laid out.
+        DispatchQueue.main.async {
+            if animated, !reduceMotion {
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(bottom, anchor: .bottom) }
+            } else {
+                proxy.scrollTo(bottom, anchor: .bottom)
+            }
+        }
+    }
+}
+
+/// A message: yours on the right in blue, the answer on the left. Text can be selected and copied.
+struct ChatBubble: View {
+    let text: String
+    let mine: Bool
+    var dim = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            if mine { Spacer(minLength: 48) }
+            Text(text)
+                .font(.callout)
+                .foregroundStyle(dim ? Color.secondary : Color.white)
+                .textSelection(.enabled)
+                .padding(.horizontal, Space.m)
+                .padding(.vertical, Space.s)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(mine ? NotchPalette.accent.opacity(0.85) : NotchPalette.card)
+                )
+                .accessibilityLabel(mine ? L("chat.you", ["text": text]) : L("chat.murmur", ["text": text]))
+            if !mine { Spacer(minLength: 48) }
+        }
+    }
+}
+
+/// One request, what the agent did, and the answer.
+struct ChatTurnView: View {
+    let entry: ChatEntry
+
+    private var answer: String {
+        switch entry.status {
+        case "cancelled": return entry.reply.isEmpty ? L("chat.cancelled") : entry.reply
+        case "failed": return entry.reply.isEmpty ? L("chat.failed") : entry.reply
+        default: return entry.reply.isEmpty ? L("chat.no_answer") : entry.reply
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.s) {
+            ChatBubble(text: entry.request, mine: true)
+            ForEach(entry.actions.prefix(4)) { action in
+                Label(action.summary, systemImage: action.failed ? "exclamationmark.triangle" : "checkmark.circle")
+                    .font(.caption2)
+                    .foregroundStyle(action.failed ? Color.orange : Color.secondary)
+                    .lineLimit(1)
+                    .padding(.leading, Space.xs)
+            }
+            ChatBubble(text: answer, mine: false, dim: entry.status != "done")
+        }
     }
 }
 

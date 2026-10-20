@@ -156,6 +156,27 @@ describe("core ↔ shell protocol", () => {
     expect(llm.requests[2]!.messages).toHaveLength(1);
   });
 
+  it("lets the chat view read the conversation, and tells it when it changes", async () => {
+    const llm = new ScriptedLlm([{ text: "Your dentist is at 3pm.", toolCalls: [] }]);
+    const { shell, waitFor } = await start(llm);
+    const { taskId } = await shell.request<{ taskId: string }>("agent.run", { transcript: "what time is my dentist" });
+    // The request shows as pending straight away, then as an entry with its reply.
+    await waitFor(
+      "conversation.update",
+      (p) => (p.pending as { request: string } | undefined)?.request === "what time is my dentist",
+    );
+    await waitFor("task.update", (p) => p.taskId === taskId && p.status === "done");
+    await waitFor("conversation.update", (p) => (p.entries as unknown[]).length === 1 && p.pending === undefined);
+    const history = await shell.request<{ entries: Array<{ request: string; reply: string; status: string }> }>(
+      "conversation.history",
+    );
+    expect(history.entries).toMatchObject([
+      { request: "what time is my dentist", reply: "Your dentist is at 3pm.", status: "done" },
+    ]);
+    await shell.request("conversation.reset");
+    expect(await shell.request("conversation.history")).toEqual({ entries: [] });
+  });
+
   it("edits typed instructions against the selection captured before the box opened", async () => {
     const llm = new ScriptedLlm([{ text: "Shorter text.", toolCalls: [] }]);
     const { shell, inserted } = await start(llm);

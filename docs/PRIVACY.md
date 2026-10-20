@@ -87,3 +87,7 @@ With a Composio key in Settings › Apps, the agent can search the web with Comp
 ## Approval modes
 
 By default Murmur shows you a preview before anything that changes something or acts on your computer. In Settings › General (or the menu bar's Approvals menu) you can choose "Approve for me", which skips the preview for routine actions but still asks about anything that could send to other people, delete, buy or press a button like Send, or "Full access", which never asks. Full access has to be confirmed in Settings. With it on, a web page, email or file that Murmur reads could try to trick it into acting, and nothing would stop it except the limits that always apply: Murmur's own windows, terminals, password managers and System Settings are never controlled. The choice is stored on your Mac and only you can change it.
+
+## The conversation view
+
+The chat under the typing box is the same short memory Murmur already keeps for a conversation: your recent requests and its answers, held in memory only. It is not written to disk, it starts over after 30 quiet minutes or when you choose New chat, and it is gone when Murmur quits. It holds the last 40 requests at most. Nothing about it is sent anywhere except the parts the AI is given to follow the conversation, which go to your own AI provider as before.

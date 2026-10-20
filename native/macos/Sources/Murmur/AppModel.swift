@@ -69,6 +69,19 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     }
     /// Dictation was locked on with two quick taps of the key and keeps listening until the key is pressed again.
     @Published var dictationLocked = false
+    /// The conversation shown under the typing box: the core's record of this chat, oldest first.
+    @Published var chat: [ChatEntry] = []
+    /// The request being worked on now, shown right away with "thinking" under it.
+    @Published var chatPending: String?
+    /// Whether the typing box is opened down into a conversation. Remembered between uses.
+    @Published var chatExpanded = UserDefaults.standard.bool(forKey: "chatExpanded") {
+        didSet {
+            UserDefaults.standard.set(chatExpanded, forKey: "chatExpanded")
+            windows.updateNotch()
+        }
+    }
+    /// What is typed in the box, kept while an approval card takes the notch for a moment.
+    @Published var typingDraft = ""
     @Published var level: Float = 0
     @Published var action: HotkeyAction = .dictate
     @Published var report: [ReportItem] = []
@@ -375,14 +388,48 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         typingFrontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
         typingAttachScreen = settings["screen.attach"] as? Bool ?? false
         typingSelectionLength = (typingContext["selection"] as? String)?.count ?? 0
-        typingMode = mode
+        // Editing the text in another app is not a conversation, so the box closes up for it.
+        if mode == .edit { chatExpanded = false }
+        typingMode = chatExpanded ? .ask : mode
         reportTimer?.invalidate()
         reportVisible = false
+        typingDraft = ""
         typingOpen = true
+        if chatExpanded { refreshChat() }
     }
 
     func closeTyping() {
+        typingDraft = ""
         if typingOpen { typingOpen = false }
+    }
+
+    // MARK: Chat
+
+    /// Opens the typing box already opened down into the conversation.
+    func openChat() {
+        chatExpanded = true
+        if typingOpen { refreshChat() } else { openTyping(.ask) }
+    }
+
+    /// The down arrow: opens the box into a conversation, or folds it back to a single line.
+    func toggleChat() {
+        chatExpanded.toggle()
+        if chatExpanded {
+            typingMode = .ask
+            refreshChat()
+        }
+    }
+
+    func refreshChat() {
+        core.request("conversation.history") { [weak self] result in
+            guard case let .success(value) = result, let json = value as? JSONObject else { return }
+            self?.applyChat(json)
+        }
+    }
+
+    private func applyChat(_ json: JSONObject) {
+        chat = (json["entries"] as? [JSONObject] ?? []).compactMap(ChatEntry.init)
+        chatPending = (json["pending"] as? JSONObject)?["request"] as? String
     }
 
     /// Sends what was typed, then returns focus to the user's app (the notch does that when the box closes).
@@ -391,7 +438,14 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         guard !request.isEmpty else { return }
         let mode = typingMode
         let context = typingContext
-        closeTyping()
+        // In the conversation view the box stays open for the next message; otherwise it closes as before.
+        let keepOpen = chatExpanded && mode == .ask
+        if keepOpen {
+            typingDraft = ""
+            chatPending = request
+        } else {
+            closeTyping()
+        }
         speaker.stop()
         reportTimer?.invalidate()
         reportVisible = false
@@ -402,7 +456,10 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
             let params: JSONObject = ["transcript": request, "context": context]
             attachWindowPicture(to: params, pid: typingFrontPID, include: typingAttachScreen) { [weak self] params in
                 self?.core.request("agent.run", params, timeout: 60) { result in
-                    if case let .failure(error) = result { self?.showError(error.localizedDescription) }
+                    if case let .failure(error) = result {
+                        self?.chatPending = nil
+                        self?.showError(error.localizedDescription)
+                    }
                 }
             }
         case .edit:
@@ -685,7 +742,10 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                 if info.status == "done", previous?.isActive ?? true, !info.reply.isEmpty, settings["tts.enabled"] as? Bool ?? true {
                     speaker.speak(info.reply, voiceId: settings["tts.voice"] as? String ?? "", rate: settings["tts.rate"] as? Double ?? 0.5)
                 }
-                if !info.long {
+                if !info.long, typingOpen, chatExpanded {
+                    // The answer is already in the conversation, so no separate report card.
+                    state = .idle
+                } else if !info.long {
                     report = []
                     reportMessage = info.reply
                     state = .done
@@ -695,6 +755,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                 }
                 refreshHistory()
             }
+        case "conversation.update":
+            applyChat(params)
         case "approval.request":
             guard let json = params["preview"] as? JSONObject, let preview = Preview(json) else { return }
             if let index = approvals.firstIndex(where: { $0.callId == preview.callId }) {

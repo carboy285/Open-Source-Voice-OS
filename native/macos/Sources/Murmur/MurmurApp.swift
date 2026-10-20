@@ -60,6 +60,7 @@ struct MenuContent: View {
         }
         Button(L("menu.type")) { model.openTyping(.ask) }
             .keyboardShortcut("t", modifiers: [.control, .option])
+        Button(L("menu.chat")) { model.openChat() }
         Button(L("menu.new_chat")) { model.newChat() }
         Button(L("menu.tasks")) { model.showPanel() }
             .keyboardShortcut("t")

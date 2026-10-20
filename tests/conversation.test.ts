@@ -158,3 +158,63 @@ describe("agent follow-ups", () => {
     expect(AGENT_SYSTEM).toContain("continuing conversation");
   });
 });
+
+describe("Conversation chat view", () => {
+  const entry = (request: string, status: "done" | "failed" | "cancelled" = "done") => ({
+    request,
+    reply: `answer to ${request}`,
+    status,
+    actions: [{ tool: "files.search", summary: "search   report", isError: false }],
+  });
+
+  it("shows every request including failed ones, in order, while the AI remembers only the good ones", () => {
+    const c = new Conversation(fakeClock());
+    c.record(entry("one"));
+    c.record(entry("two", "failed"));
+    c.record(entry("three", "cancelled"));
+    const { entries } = c.snapshot();
+    expect(entries.map((e) => [e.request, e.status])).toEqual([
+      ["one", "done"],
+      ["two", "failed"],
+      ["three", "cancelled"],
+    ]);
+    expect(entries[0]!.actions[0]!.summary).toBe("search report");
+    expect(c.length).toBe(0);
+  });
+
+  it("shows a request as pending until it ends, and tells the screen about each change", () => {
+    const c = new Conversation(fakeClock());
+    let changes = 0;
+    c.onChange = () => void (changes += 1);
+    c.begin("what time is it");
+    expect(c.snapshot().pending).toEqual({ request: "what time is it" });
+    c.record(entry("what time is it"));
+    expect(c.snapshot().pending).toBeUndefined();
+    expect(changes).toBe(2);
+    c.reset();
+    expect(c.snapshot()).toEqual({ entries: [] });
+    expect(changes).toBe(3);
+  });
+
+  it("gives out a copy, keeps the newest forty, and clears with the AI's memory after 30 quiet minutes", () => {
+    const clock = fakeClock();
+    const c = new Conversation(clock);
+    for (let i = 0; i < 45; i++) c.record(entry(`q${i}`));
+    const { entries } = c.snapshot();
+    expect(entries).toHaveLength(40);
+    expect(entries[0]!.request).toBe("q5");
+    entries.length = 0;
+    expect(c.snapshot().entries).toHaveLength(40);
+    clock.advance(CONVERSATION_IDLE_MS + 1);
+    expect(c.snapshot().entries).toEqual([]);
+  });
+
+  it("keeps a request that is still running even when the chat has been quiet", () => {
+    const clock = fakeClock();
+    const c = new Conversation(clock);
+    c.record(entry("old"));
+    c.begin("slow one");
+    clock.advance(CONVERSATION_IDLE_MS + 1);
+    expect(c.snapshot().pending).toEqual({ request: "slow one" });
+  });
+});

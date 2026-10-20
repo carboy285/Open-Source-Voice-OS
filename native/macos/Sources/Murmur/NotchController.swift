@@ -174,7 +174,8 @@ final class NotchController: NSObject, ObservableObject, NSWindowDelegate {
             break
         }
         if model.circle != nil { return .circle }
-        if model.typingOpen { return .typing }
+        // In the conversation view an approval comes first, so the agent can carry on; the box returns after.
+        if model.typingOpen, !(model.chatExpanded && !model.approvals.isEmpty) { return .typing }
         if model.reportVisible { return .report }
         if let first = model.approvals.first { return .approval(first.callId) }
         let longTask = model.activeTasks.first { $0.long }

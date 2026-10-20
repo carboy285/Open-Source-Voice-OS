@@ -327,5 +327,17 @@
   "settings.approval.full.confirm.button": "Turn on Full access",
   "indicator.locked_hint": "Press the key again to stop · Esc to cancel",
   "settings.double_tap_lock": "Tap the key twice to lock it on",
-  "settings.double_tap_lock.help": "Tap the key twice quickly and Murmur stays on without you holding it. This works for dictation, agent, edit and Circle to Ask (hold Shift, Command or Control with the key for those). Press the key once more to stop."
+  "settings.double_tap_lock.help": "Tap the key twice quickly and Murmur stays on without you holding it. This works for dictation, agent, edit and Circle to Ask (hold Shift, Command or Control with the key for those). Press the key once more to stop.",
+  "menu.chat": "Open chat",
+  "typing.prompt.chat": "Message Murmur…",
+  "chat.title": "Conversation",
+  "chat.show": "Show the conversation",
+  "chat.hide": "Hide the conversation",
+  "chat.empty": "Your conversation shows up here. Murmur remembers it for 30 minutes, or until you start a new chat.",
+  "chat.thinking": "Thinking…",
+  "chat.you": "You: {text}",
+  "chat.murmur": "Murmur: {text}",
+  "chat.cancelled": "Cancelled.",
+  "chat.failed": "That didn't work.",
+  "chat.no_answer": "Done."
 }

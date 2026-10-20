@@ -34,6 +34,7 @@ export function fakeShell() {
     "approval.request",
     "approval.dismiss",
     "reminder.fire",
+    "conversation.update",
     "core.ready",
   ]) {
     shell.on(method, (params) => events.push({ method, params }));

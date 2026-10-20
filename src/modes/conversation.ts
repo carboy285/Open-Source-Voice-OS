@@ -10,7 +10,26 @@ export interface Turn {
   at: number;
 }
 
+/** One line of the chat the user can read: what they asked, what came back, and what ran. */
+export interface ChatEntry {
+  id: number;
+  request: string;
+  reply: string;
+  /** "done", "failed" or "cancelled". Failed and cancelled turns show up here but are not remembered by the model. */
+  status: "done" | "failed" | "cancelled";
+  actions: Array<{ tool: string; summary: string; isError: boolean }>;
+  at: number;
+}
+
+export interface ChatSnapshot {
+  entries: ChatEntry[];
+  /** The request being worked on right now, if any. */
+  pending?: { request: string };
+}
+
 export const CONVERSATION_IDLE_MS = 30 * 60_000;
+const MAX_SHOWN = 40;
+const SHOWN_CHARS = 6000;
 const MAX_TURNS = 10;
 const MAX_CHARS = 12_000;
 const MAX_ACTIONS = 6;
@@ -26,6 +45,11 @@ const flat = (s: string, max: number) => {
  */
 export class Conversation {
   private turns: Turn[] = [];
+  private shown: ChatEntry[] = [];
+  private pending?: { request: string };
+  private nextId = 1;
+  /** Called whenever the chat the user sees changes. */
+  onChange?: () => void;
 
   constructor(
     private readonly clock: Clock = systemClock,
@@ -35,6 +59,9 @@ export class Conversation {
   private expire(): void {
     const last = this.turns.at(-1);
     if (last && this.clock.now() - last.at >= this.idleMs) this.turns = [];
+    // The chat on screen starts over with the model's memory, so it never shows more than the AI remembers.
+    const lastShown = this.shown.at(-1);
+    if (lastShown && !this.pending && this.clock.now() - lastShown.at >= this.idleMs) this.shown = [];
   }
 
   get length(): number {
@@ -44,6 +71,38 @@ export class Conversation {
 
   reset(): void {
     this.turns = [];
+    this.shown = [];
+    this.pending = undefined;
+    this.onChange?.();
+  }
+
+  /** A request has started. The chat shows it right away, with "thinking" under it. */
+  begin(request: string): void {
+    this.expire();
+    this.pending = { request: request.slice(0, SHOWN_CHARS) };
+    this.onChange?.();
+  }
+
+  /** The chat the user can read, oldest first. A copy, so the screen can't change what the AI remembers. */
+  snapshot(): ChatSnapshot {
+    this.expire();
+    return { entries: structuredClone(this.shown), ...(this.pending ? { pending: { ...this.pending } } : {}) };
+  }
+
+  /** A request ended, however it ended. It goes on the chat the user sees. */
+  record(entry: Omit<ChatEntry, "id" | "at">): void {
+    this.expire();
+    this.pending = undefined;
+    this.shown.push({
+      ...entry,
+      id: this.nextId++,
+      request: entry.request.slice(0, SHOWN_CHARS),
+      reply: entry.reply.slice(0, SHOWN_CHARS),
+      actions: entry.actions.slice(0, 8).map((a) => ({ ...a, summary: flat(a.summary, 140) })),
+      at: this.clock.now(),
+    });
+    if (this.shown.length > MAX_SHOWN) this.shown.splice(0, this.shown.length - MAX_SHOWN);
+    this.onChange?.();
   }
 
   add(turn: Omit<Turn, "at">): void {

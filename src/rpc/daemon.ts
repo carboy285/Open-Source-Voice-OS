@@ -155,6 +155,7 @@ export function registerMethods(peer: JsonRpcPeer, core: MurmurCore, approvals: 
       return { ok: true };
     })
     .handle("conversation.status", () => ({ turns: core.conversation.length }))
+    .handle("conversation.history", () => core.conversation.snapshot())
 
     .handle("agent.run", (p) =>
       core.startTask({

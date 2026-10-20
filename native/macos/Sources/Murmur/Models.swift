@@ -152,6 +152,34 @@ struct TaskInfo: Identifiable {
     var isActive: Bool { status == "running" || status == "waiting_approval" }
 }
 
+/// One thing the agent ran during a request, shown small under the reply in the chat.
+struct ChatAction: Identifiable {
+    let id = UUID()
+    let summary: String
+    let failed: Bool
+}
+
+/// One request and its answer in the chat history the core keeps for the conversation.
+struct ChatEntry: Identifiable {
+    let id: Int
+    let request: String
+    let reply: String
+    /// "done", "failed" or "cancelled".
+    let status: String
+    let actions: [ChatAction]
+
+    init?(_ json: JSONObject) {
+        guard let id = json["id"] as? Int else { return nil }
+        self.id = id
+        request = json["request"] as? String ?? ""
+        reply = json["reply"] as? String ?? ""
+        status = json["status"] as? String ?? "done"
+        actions = (json["actions"] as? [JSONObject] ?? []).map {
+            ChatAction(summary: $0["summary"] as? String ?? $0["tool"] as? String ?? "", failed: $0["isError"] as? Bool ?? false)
+        }
+    }
+}
+
 struct ReportItem: Identifiable {
     var id: String { category }
     let category: String

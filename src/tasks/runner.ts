@@ -85,6 +85,7 @@ export class TaskRunner {
     this.recent.set(id, { transcript, context });
     if (this.recent.size > 50) this.recent.delete(this.recent.keys().next().value!);
     this.store.save(record);
+    this.options.conversation?.begin(transcript);
     entry.done = this.execute(entry);
     return { taskId: id, done: entry.done };
   }
@@ -210,6 +211,12 @@ export class TaskRunner {
     this.emit(entry);
     if (entry.long) this.options.notify?.(status, reply);
     this.live.delete(record.id);
+    this.options.conversation?.record({
+      request: entry.transcript,
+      reply,
+      status: status === "done" ? "done" : status === "cancelled" ? "cancelled" : "failed",
+      actions: record.steps.map((s) => ({ tool: s.tool, summary: s.inputSummary, isError: s.isError })),
+    });
     return structuredClone(record);
   }
 }

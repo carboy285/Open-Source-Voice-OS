@@ -21,7 +21,7 @@ import { parseApprovalMode } from "../gate/safety.js";
 import { resolveLocale, t, type Locale } from "../i18n/index.js";
 import { forgetSecrets, loadConfig, type McpConfig } from "../mcp/config.js";
 import { McpManager, type ConnectionFactory } from "../mcp/manager.js";
-import { Conversation } from "../modes/conversation.js";
+import { Conversation, type ChatSnapshot } from "../modes/conversation.js";
 import { editSelection } from "../modes/edit.js";
 import { processDictation } from "../modes/dictation.js";
 import { AnthropicLlm } from "../providers/anthropic.js";
@@ -71,7 +71,8 @@ export type CoreEvent =
   | { type: "models.done"; id: string; ok: boolean; error?: string }
   | { type: "chatgpt.login"; state: "waiting" | "done" | "failed"; error?: string }
   | ComposioEvent
-  | { type: "agents.update"; session: AgentSession };
+  | { type: "agents.update"; session: AgentSession }
+  | ({ type: "conversation.update" } & ChatSnapshot);
 
 export interface ChangeSummary {
   category: ChangeCategory;
@@ -215,6 +216,7 @@ export class MurmurCore {
       fetch: this.options.fetch,
     });
     this.conversation = new Conversation(this.clock);
+    this.conversation.onChange = () => this.emit({ type: "conversation.update", ...this.conversation.snapshot() });
     this.runner = new TaskRunner({
       conversation: this.conversation,
       llm: () => this.llm(),

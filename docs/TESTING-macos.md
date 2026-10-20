@@ -194,6 +194,17 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 8. Lock dictation, then press Shift: it switches to an agent request.
 9. Hold the key and talk as before: unchanged. Turn the setting off and double-tap: no lock.
 
+### 4.11 Conversation view
+
+1. Press ⌃⌥T. The box looks as before, with a small down arrow beside the close button.
+2. Click the arrow. The box grows downward and an empty conversation area appears ("Your conversation shows up here…"). The Ask / Edit switch is replaced by a "Conversation" title.
+3. Type "What's 15% of 80?" and press Return. Your message appears at once in blue with a spinner, then the answer appears under it. The box stays open and keeps focus.
+4. Ask a follow-up that needs the first answer ("and double that"). The answer uses the earlier one.
+5. Ask for something that uses a tool (for example, add a reminder with Approve for me off). The approval card takes the notch; after you answer it the conversation returns with what you typed still there. The reply shows small lines for what ran.
+6. Hold the dictation key with Shift and ask something by voice. The conversation shows the request and the answer too.
+7. Click the up arrow: the box folds back to a single line. Press Esc, reopen with ⌃⌥T: the arrow state is remembered and the earlier messages are still there. Choose New chat: they are cleared.
+8. Menu bar › Open chat opens the box already down.
+
 ## 5. MCP
 
 ```sh
