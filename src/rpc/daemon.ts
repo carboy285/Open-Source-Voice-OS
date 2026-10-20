@@ -164,6 +164,8 @@ export function registerMethods(peer: JsonRpcPeer, core: MurmurCore, approvals: 
     })
     .handle("conversation.status", () => ({ turns: core.conversation.length }))
     .handle("conversation.history", () => core.conversation.snapshot())
+    .handle("providers.catalog", () => core.providerCatalog())
+    .handle("tts.synthesize", (p) => core.synthesize(str(p.text, "text")))
 
     .handle("agent.run", (p) =>
       core.startTask({

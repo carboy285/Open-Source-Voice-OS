@@ -287,24 +287,28 @@ describe("live previews and setup practice", () => {
 
 describe("preview cancellation at release", () => {
   it("aborts unfinished preview recognition and transcribes the final recording", async () => {
-    let calls = 0;
     let aborted = false;
     const s = setup({
       stt: {
+        // Only a preview carries a signal; the final recording is transcribed without one.
         transcribe: async (_audio, options) => {
-          calls++;
-          if (calls > 1) return { text: "the complete sentence" };
-          return await new Promise((_resolve, reject) =>
-            options?.signal?.addEventListener("abort", () => {
+          const signal = options?.signal;
+          if (!signal) return { text: "the complete sentence" };
+          return await new Promise((_resolve, reject) => {
+            const stop = () => {
               aborted = true;
               reject(new Error("cancelled"));
-            }),
-          );
+            };
+            if (signal.aborted) stop();
+            else signal.addEventListener("abort", stop);
+          });
         },
       },
     });
     s.core.beginDictation();
     const preview = s.core.previewDictation(speech);
+    // Let the preview's recognition start before the key is released.
+    await new Promise((resolve) => setTimeout(resolve, 10));
     await s.core.finishDictation({ audio: speech });
     expect(aborted).toBe(true);
     expect(await preview).toEqual({ text: "" });

@@ -2,8 +2,15 @@ import type { LlmProvider, LlmRequest, LlmResponse, Message, ToolCall } from "..
 import { WireNames } from "./wire-names.js";
 
 export interface OpenAICompatibleOptions {
-  /** e.g. http://localhost:11434 for a local server. "/v1/chat/completions" is appended. */
+  /**
+   * A server's address. A full chat address (ending "/chat/completions") is used as given; anything else gets
+   * "/v1/chat/completions" added, so "http://localhost:11434" works.
+   */
   baseUrl: string;
+  /** The server only takes a plain subset of JSON Schema for tool inputs, so the rest is dropped from them. */
+  plainSchemas?: boolean;
+  /** OpenAI's newer models only accept `max_completion_tokens`. */
+  maxTokensParam?: "max_tokens" | "max_completion_tokens";
   model: string;
   apiKey?: string;
   /** The model behind this server accepts images (a setting; unknown from the outside). */
@@ -29,16 +36,21 @@ export class OpenAICompatibleLlm implements LlmProvider {
 
   async complete(request: LlmRequest): Promise<LlmResponse> {
     const names = new WireNames();
-    const url = `${this.options.baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "")}/v1/chat/completions`;
+    const base = this.options.baseUrl.replace(/\/+$/, "");
+    const url = base.endsWith("/chat/completions") ? base : `${base.replace(/\/v1$/, "")}/v1/chat/completions`;
     const body = {
       model: this.options.model,
-      max_tokens: request.maxTokens ?? 1024,
+      [this.options.maxTokensParam ?? "max_tokens"]: request.maxTokens ?? 1024,
       messages: [{ role: "system", content: request.system } as ChatMessage, ...toChat(request.messages, names)],
       ...(request.tools?.length
         ? {
             tools: request.tools.map((t) => ({
               type: "function",
-              function: { name: names.wire(t.name), description: t.description, parameters: t.inputSchema },
+              function: {
+                name: names.wire(t.name),
+                description: t.description,
+                parameters: this.options.plainSchemas ? plainSchema(t.inputSchema) : t.inputSchema,
+              },
             })),
           }
         : {}),
@@ -65,6 +77,22 @@ export class OpenAICompatibleLlm implements LlmProvider {
     }));
     return { text: typeof message?.content === "string" ? message.content : "", toolCalls };
   }
+}
+
+/** Drops what a plain-schema server rejects: additionalProperties, and string formats other than date-time. */
+export function plainSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(plainSchema);
+  if (!schema || typeof schema !== "object") return schema;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
+    if (key === "additionalProperties" || key === "$schema") continue;
+    if (key === "format" && value !== "date-time" && value !== "enum") continue;
+    out[key] =
+      key === "properties" && value && typeof value === "object"
+        ? Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, plainSchema(v)]))
+        : plainSchema(value);
+  }
+  return out;
 }
 
 function parseArgs(raw: string): Record<string, unknown> {

@@ -49,12 +49,22 @@ export const DEFAULT_SETTINGS = {
   "agents.recentFolders": [] as string[],
   "composio.userId": "",
   "composio.apps": {} as Record<string, { enabled: boolean; readOnly: boolean }>,
-  "llm.provider": "none" as "none" | "anthropic" | "openai-compatible" | "chatgpt",
+  /** "none", "anthropic", "openai-compatible" (your own server), "chatgpt", or the id of a service in providers/catalog.ts. */
+  "llm.provider": "none" as string,
   "llm.model": "",
   "llm.baseUrl": "",
   /** The OpenAI-compatible model can see images (circle to ask, screen questions). */
   "llm.vision": false,
   "stt.engine": "parakeet" as "parakeet" | "whisper",
+  /** A hosted speech service (id from providers/catalog.ts), or "" for the models on this computer. */
+  "stt.provider": "" as string,
+  "stt.baseUrl": "",
+  "stt.model.cloud": "",
+  /** The voice for spoken replies: "" for the Mac's own voices, or a hosted service. */
+  "tts.provider": "" as string,
+  "tts.model": "",
+  "tts.cloudVoice": "",
+  "tts.baseUrl": "",
   "stt.parakeetModel": "",
   "stt.parakeetBinary": "parakeet-cli",
   "stt.binary": "whisper-cli",

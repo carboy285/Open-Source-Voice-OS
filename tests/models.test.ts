@@ -89,26 +89,26 @@ describe("core speech engine", () => {
     });
   }
 
-  it("uses Parakeet once a downloaded model is chosen, and falls back to whisper without one", () => {
+  it("uses Parakeet once a downloaded model is chosen, and falls back to whisper without one", async () => {
     const dir = newDir();
     const c = core(dir);
-    expect(c.stt()).toBeUndefined();
+    expect(await c.stt()).toBeUndefined();
     c.settings.set("stt.model", "/models/ggml-base.bin");
-    expect(c.stt()).toBeInstanceOf(WhisperCppStt);
+    expect(await c.stt()).toBeInstanceOf(WhisperCppStt);
 
     expect(() => c.useModel(RECOMMENDED_MODEL.id)).toThrow(/Download/);
     writeFileSync(join(dir, RECOMMENDED_MODEL.file), "model");
     c.useModel(RECOMMENDED_MODEL.id);
-    expect(c.stt()).toBeInstanceOf(ParakeetCppStt);
+    expect(await c.stt()).toBeInstanceOf(ParakeetCppStt);
     expect(c.modelState().active).toBe(RECOMMENDED_MODEL.id);
 
     c.settings.set("stt.engine", "whisper");
-    expect(c.stt()).toBeInstanceOf(WhisperCppStt);
+    expect(await c.stt()).toBeInstanceOf(WhisperCppStt);
 
     c.settings.set("stt.engine", "parakeet");
     c.removeModel(RECOMMENDED_MODEL.id);
     expect(existsSync(join(dir, RECOMMENDED_MODEL.file))).toBe(false);
     expect(c.settings.get("stt.parakeetModel")).toBe("");
-    expect(c.stt()).toBeInstanceOf(WhisperCppStt);
+    expect(await c.stt()).toBeInstanceOf(WhisperCppStt);
   });
 });

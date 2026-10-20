@@ -29,6 +29,20 @@ import { ChatGptSession } from "../providers/chatgpt-auth.js";
 import { ChatGptCodexLlm } from "../providers/chatgpt-codex.js";
 import { redactSecrets } from "./redact.js";
 import { OpenAICompatibleLlm } from "../providers/openai-compatible.js";
+import {
+  LLM_PRESETS,
+  STT_PRESETS,
+  TTS_PRESETS,
+  allProviderKeyNames,
+  findLlmPreset,
+  findSttPreset,
+  findTtsPreset,
+  llmKeyName,
+  sttKeyName,
+  ttsKeyName,
+} from "../providers/catalog.js";
+import { CloudStt } from "../providers/cloud-stt.js";
+import { CloudTts, type Speech } from "../providers/cloud-tts.js";
 import { WhisperCppStt } from "../providers/whisper-cpp.js";
 import { ReminderScheduler } from "../reminders/scheduler.js";
 import { localTimeZone } from "../reminders/time.js";
@@ -357,6 +371,24 @@ export class MurmurCore {
       if (!(await this.chatgpt.status()).signedIn) return undefined;
       return new ChatGptCodexLlm({ session: this.chatgpt, model, fetch: this.options.fetch });
     }
+    const preset = findLlmPreset(provider);
+    if (preset) {
+      const apiKey = await this.secrets.get(llmKeyName(preset.id));
+      // A hosted service needs a key; one on this computer doesn't. The model starts as the preset's own.
+      if (!preset.local && !apiKey) return undefined;
+      const presetModel = model || preset.defaultModel;
+      const customUrl = this.settings.get("llm.baseUrl");
+      if (!presetModel) return undefined;
+      return new OpenAICompatibleLlm({
+        baseUrl: preset.local && customUrl ? customUrl : preset.chatUrl,
+        model: presetModel,
+        apiKey,
+        vision: preset.vision === true || this.settings.get("llm.vision"),
+        maxTokensParam: preset.maxTokensParam,
+        plainSchemas: preset.plainSchemas,
+        fetch: this.options.fetch,
+      });
+    }
     if (provider === "openai-compatible") {
       const baseUrl = this.settings.get("llm.baseUrl");
       if (!baseUrl || !model) return undefined;
@@ -375,8 +407,25 @@ export class MurmurCore {
    * NVIDIA Parakeet when a downloaded model is chosen (the default engine), whisper.cpp when picked in
    * Settings or when no Parakeet model is installed yet but a whisper model is set.
    */
-  stt(): SttProvider | undefined {
+  async stt(): Promise<SttProvider | undefined> {
     if (this.options.stt) return this.options.stt;
+    // A hosted speech service, when the user chose one. Their recordings then go to that service.
+    const cloud = findSttPreset(this.settings.get("stt.provider"));
+    if (cloud) {
+      const apiKey = await this.secrets.get(sttKeyName(cloud.id));
+      // A server you run yourself (custom, NVIDIA's container) needs no key; a hosted one does.
+      const ownServer = cloud.id === "custom" || cloud.id === "nvidia";
+      const saved = this.settings.get("stt.baseUrl");
+      const url = cloud.id === "custom" ? saved : ownServer ? saved || cloud.url : cloud.url;
+      if (!url || (!ownServer && !apiKey)) return undefined;
+      return new CloudStt({
+        api: cloud.api,
+        url,
+        model: this.settings.get("stt.model.cloud") || cloud.defaultModel,
+        apiKey,
+        fetch: this.options.fetch,
+      });
+    }
     const engine = this.settings.get("stt.engine");
     if (engine === "parakeet") {
       const id = this.settings.get("stt.parakeetModel");
@@ -388,6 +437,55 @@ export class MurmurCore {
     const model = this.settings.get("stt.model");
     if (!model) return undefined;
     return new WhisperCppStt({ binary: this.settings.get("stt.binary") || "whisper-cli", model });
+  }
+
+  /** Every service Murmur can use, for Settings to list. Keys are never part of it. */
+  providerCatalog() {
+    return {
+      llm: LLM_PRESETS.map(({ id, name, defaultModel, keyUrl, local, vision }) => ({
+        id,
+        name,
+        defaultModel,
+        keyUrl,
+        local: local === true,
+        vision: vision === true,
+      })),
+      stt: STT_PRESETS.map(({ id, name, defaultModel, keyUrl, url }) => ({ id, name, defaultModel, keyUrl, url })),
+      tts: TTS_PRESETS.map(({ id, name, defaultModel, defaultVoice, keyUrl, url }) => ({
+        id,
+        name,
+        defaultModel,
+        defaultVoice,
+        keyUrl,
+        url,
+      })),
+    };
+  }
+
+  /** The chosen hosted voice, or nothing when the Mac's own voices are in use. */
+  async cloudTts(): Promise<CloudTts | undefined> {
+    const preset = findTtsPreset(this.settings.get("tts.provider"));
+    if (!preset) return undefined;
+    const apiKey = await this.secrets.get(ttsKeyName(preset.id));
+    const ownServer = preset.id === "custom";
+    const url = ownServer ? this.settings.get("tts.baseUrl") : preset.url;
+    if (!url || (!ownServer && !apiKey)) return undefined;
+    return new CloudTts({
+      api: preset.api,
+      url,
+      model: this.settings.get("tts.model") || preset.defaultModel,
+      voice: this.settings.get("tts.cloudVoice") || preset.defaultVoice,
+      apiKey,
+      fetch: this.options.fetch,
+    });
+  }
+
+  /** A spoken reply from the hosted voice. The shell plays it, and falls back to the Mac's voice if this fails. */
+  async synthesize(text: string): Promise<{ audio: string; mediaType: string }> {
+    const tts = await this.cloudTts();
+    if (!tts) throw new Error("No hosted voice is set up.");
+    const speech: Speech = await tts.synthesize(text);
+    return { audio: speech.audio.toString("base64"), mediaType: speech.mediaType };
   }
 
   // Speech models
@@ -445,7 +543,7 @@ export class MurmurCore {
   }
 
   async status(): Promise<{ llm: boolean; stt: boolean; locale: Locale }> {
-    return { llm: (await this.llm()) !== undefined, stt: this.stt() !== undefined, locale: this.locale };
+    return { llm: (await this.llm()) !== undefined, stt: (await this.stt()) !== undefined, locale: this.locale };
   }
 
   // Dictation
@@ -522,8 +620,10 @@ export class MurmurCore {
   }
 
   private async transcribe(audio: Pcm16Audio, signal?: AbortSignal): Promise<{ text: string; language?: string }> {
-    const stt = this.stt();
+    const stt = await this.stt();
     if (!stt) throw new StepError("transcribing", this.t("error.no_stt"));
+    // A preview that was cancelled while its engine was being set up never starts.
+    if (signal?.aborted) throw new StepError("transcribing", "cancelled");
     const languages = this.settings.get("dictation.languages");
     // Silence makes whisper invent text ("Thank you."), so silent recordings never reach it.
     const stats = speechStats(audio);
@@ -760,7 +860,13 @@ export class MurmurCore {
     await this.previewJob;
     const indexed = this.settings.get("secrets.index");
     const config = await loadConfig(this.mcpPath).catch(() => ({ servers: {} }));
-    const known = [LLM_KEY, WEB_SEARCH_KEY, COMPOSIO_KEY, ...this.registry.catalog().map((c) => tokenKey(c.id))];
+    const known = [
+      LLM_KEY,
+      WEB_SEARCH_KEY,
+      COMPOSIO_KEY,
+      ...allProviderKeyNames(),
+      ...this.registry.catalog().map((c) => tokenKey(c.id)),
+    ];
     for (const key of new Set([...indexed, ...known])) await this.options.bridge.secrets.delete(key).catch(() => {});
     for (const server of Object.values(config.servers))
       await forgetSecrets(server, this.options.bridge.secrets).catch(() => {});
