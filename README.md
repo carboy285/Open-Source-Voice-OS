@@ -56,10 +56,45 @@ Recordings are written to a temporary file for Whisper and deleted right after.
 
 `npm run app:dist` builds an unsigned `.dmg`; signing and notarization need your Apple developer credentials.
 
+## Snippets and voice commands
+
+Before an utterance goes to the model, Voice OS checks whether it is a saved snippet or a built-in command. Matching
+is on the whole utterance, ignoring filler words, case, extra spacing and trailing punctuation, so
+"Um, Scratch that." and "scratch that" are the same thing.
+
+| Say | Does |
+| --- | --- |
+| "scratch that" or "undo that" | Undo the last thing Voice OS inserted (⌘Z in the focused app) |
+| "select all" | Select everything in the focused app (⌘A) |
+| a snippet's trigger, or "insert <trigger>" | Type the snippet's text verbatim |
+
+Add snippets to the settings file (`~/Library/Application Support/Open Source Voice OS/config.json`):
+
+```json
+{
+  "snippets": {
+    "my address": "1 Infinite Loop\nCupertino, CA",
+    "sign off": "Best,\nSam"
+  }
+}
+```
+
+Snippets are inserted exactly as written: no filler removal, no punctuation fix-up, no `polishDictation` pass. That
+makes them useful for addresses, sign-offs and boilerplate. Because matching is whole-utterance only,
+"select all the rows and delete them" is dictated normally rather than executed. Set `"voiceCommands": false` to
+treat the built-in command phrases as ordinary dictation too. Commands send keystrokes, so they need Accessibility
+permission; "scratch that" is a plain ⌘Z, so it undoes whatever the focused app did last — the insertion in normal use.
+
+From the CLI, snippets are passed per call and commands are off, since stdout has nothing to undo:
+
+```bash
+voiceos dictate --text "insert my address" --snippet "my address=1 Infinite Loop, Cupertino"
+```
+
 ## Commands
 
 ```bash
-voiceos dictate --text "um so the the meeting is at noon" [--polish] [--app Mail]
+voiceos dictate --text "um so the the meeting is at noon" [--polish] [--app Mail] [--snippet "phrase=text"]...
 voiceos edit --selection "hello world" --instruction "make it friendlier"
 voiceos agent --text "open /bin/ls and tell me what it does" --mcp voiceos.mcp.json
 ```

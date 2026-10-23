@@ -2,6 +2,7 @@ export * from "./core/types.js";
 export * from "./modes/dictation.js";
 export * from "./modes/edit.js";
 export * from "./modes/agent.js";
+export * from "./modes/commands.js";
 export * from "./mcp/host.js";
 export * from "./providers/anthropic.js";
 export * from "./providers/codex.js";

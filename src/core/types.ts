@@ -3,11 +3,16 @@ export interface SttProvider {
   transcribe(audioPath: string): Promise<string>;
 }
 
+/** OS-level editing actions a spoken command can trigger. */
+export type InjectorCommand = "undo" | "selectAll";
+
 /** Where dictated or edited text ends up (focused text field, stdout, a test buffer...). */
 export interface TextInjector {
   insert(text: string): Promise<void>;
   getSelection(): Promise<string>;
   replaceSelection(text: string): Promise<void>;
+  /** Runs an editing command. Absent when the target cannot do it (for example the CLI's stdout). */
+  command?(name: InjectorCommand): Promise<void>;
 }
 
 /** Describes what the user is working in; used to adapt formatting. */

@@ -1,5 +1,6 @@
-import type { AppContext, ConfirmHandler, LlmProvider, SttProvider, TextInjector, ToolHost } from "../core/types.js";
+import type { AppContext, ConfirmHandler, InjectorCommand, LlmProvider, SttProvider, TextInjector, ToolHost } from "../core/types.js";
 import { runAgent } from "../modes/agent.js";
+import { resolveUtterance } from "../modes/commands.js";
 import { dictate } from "../modes/dictation.js";
 import { editSelection } from "../modes/edit.js";
 
@@ -24,6 +25,10 @@ export interface SessionDeps {
   frontmostApp?: () => Promise<string | undefined>;
   /** Refine dictation with the model (slower, nicer). */
   polishDictation?: boolean;
+  /** Saved snippets matched against the whole utterance. */
+  snippets?: Record<string, string>;
+  /** Resolve built-in commands such as "scratch that". */
+  voiceCommands?: boolean;
   /** Recordings shorter than this are treated as accidental taps. */
   minRecordingMs?: number;
   now?: () => number;
@@ -35,6 +40,8 @@ export class VoiceSession {
   private mode: VoiceMode = "dictate";
   private startedAt = 0;
   private starting: Promise<void> = Promise.resolve();
+  /** True once this session has inserted text, so "scratch that" knows there is something to undo. */
+  private inserted = false;
 
   constructor(private readonly deps: SessionDeps) {}
 
@@ -94,7 +101,24 @@ export class VoiceSession {
     const { injector, llm, status } = this.deps;
     const context: AppContext = { appName: await this.deps.frontmostApp?.() };
     if (mode === "dictate") {
-      const text = await dictate(transcript, injector, context, { polish: this.deps.polishDictation ? llm : undefined });
+      const utterance = resolveUtterance(transcript, {
+        snippets: this.deps.snippets,
+        commands: this.deps.voiceCommands !== false,
+      });
+      if (utterance.kind === "command") {
+        await this.runCommand(utterance.command);
+        return;
+      }
+      if (utterance.kind === "snippet") {
+        await injector.insert(utterance.text);
+        this.inserted = true;
+        status("done", `Inserted “${utterance.trigger}”.`);
+        return;
+      }
+      const text = await dictate(utterance.text, injector, context, {
+        polish: this.deps.polishDictation ? llm : undefined,
+      });
+      this.inserted ||= Boolean(text);
       status("done", text ? undefined : "Nothing to insert.");
     } else if (mode === "edit") {
       await editSelection(transcript, injector, llm);
@@ -108,6 +132,21 @@ export class VoiceSession {
         await tools.close?.();
       }
     }
+  }
+
+  private async runCommand(command: InjectorCommand): Promise<void> {
+    const { injector, status } = this.deps;
+    if (!injector.command) {
+      status("error", "Voice commands are not available here.");
+      return;
+    }
+    if (command === "undo" && !this.inserted) {
+      status("error", "Nothing to scratch.");
+      return;
+    }
+    await injector.command(command);
+    if (command === "undo") this.inserted = false;
+    status("done", command === "undo" ? "Scratched that." : "Selected all.");
   }
 }
 

@@ -206,6 +206,8 @@ app.whenReady().then(async () => {
     status: onStatus,
     frontmostApp: () => frontmostApp(realExec),
     polishDictation: config.polishDictation,
+    snippets: config.snippets,
+    voiceCommands: config.voiceCommands,
   });
 
   buildTray();

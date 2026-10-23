@@ -12,6 +12,10 @@ export const AppConfig = z.object({
   mcpConfig: z.string().optional(),
   /** Refine dictation with the model. Slower because each call starts a Codex run. */
   polishDictation: z.boolean().default(false),
+  /** Saved snippets: the phrase the user says maps to the text that is typed. */
+  snippets: z.record(z.string(), z.string()).default({}),
+  /** Resolve built-in commands such as "scratch that" and "select all" instead of dictating them. */
+  voiceCommands: z.boolean().default(true),
   /** Hold-to-talk keys, by uiohook key name. Defaults avoid keys that type characters. */
   hotkeys: z
     .object({

@@ -6,6 +6,7 @@ import { createLlm, createStt } from "../config.js";
 import type { ConfirmHandler, ToolHost } from "../core/types.js";
 import { loadMcpConfig, McpToolHost } from "../mcp/host.js";
 import { runAgent } from "../modes/agent.js";
+import { parseSnippetFlags, resolveUtterance } from "../modes/commands.js";
 import { dictate } from "../modes/dictation.js";
 import { editSelection } from "../modes/edit.js";
 import { codexAuth } from "../providers/codex.js";
@@ -15,11 +16,12 @@ const USAGE = `voiceos <command>
 
   login                         Sign in with your ChatGPT plan (runs "codex login")
   status                        Show Codex sign-in status
-  dictate  --text T | --audio F [--app NAME] [--polish] [--spoken-punctuation]
+  dictate  --text T | --audio F [--app NAME] [--polish] [--spoken-punctuation] [--snippet "phrase=text"]...
   edit     --instruction I --selection S
   agent    --text T | --audio F [--mcp FILE] [--yes]
 
 Model: VOICEOS_LLM=codex (default) or anthropic. Audio needs WHISPER_MODEL (whisper.cpp).
+Snippets: repeat --snippet "my address=1 Infinite Loop" to expand a spoken phrase.
 MCP servers: --mcp FILE or ./voiceos.mcp.json, e.g. REA (see voiceos.mcp.example.json).`;
 
 async function transcript(values: { text?: string; audio?: string }): Promise<string> {
@@ -48,6 +50,7 @@ async function main(argv: string[]): Promise<number> {
       app: { type: "string" },
       polish: { type: "boolean" },
       "spoken-punctuation": { type: "boolean" },
+      snippet: { type: "string", multiple: true },
       instruction: { type: "string" },
       selection: { type: "string" },
       mcp: { type: "string" },
@@ -65,8 +68,21 @@ async function main(argv: string[]): Promise<number> {
     }
     case "dictate": {
       const injector = new StdoutInjector();
+      const spoken = await transcript(values);
+      const utterance = resolveUtterance(spoken, {
+        snippets: parseSnippetFlags(values.snippet),
+        // The CLI prints to stdout; it cannot press Cmd+Z in another app.
+        commands: false,
+      });
+      if (utterance.kind === "snippet") {
+        await injector.insert(utterance.text);
+        return 0;
+      }
+      if (utterance.kind === "command") {
+        throw new Error(`"${utterance.command}" is a voice command; it only works in the macOS app.`);
+      }
       await dictate(
-        await transcript(values),
+        utterance.text,
         injector,
         { appName: values.app },
         { spokenPunctuation: values["spoken-punctuation"], polish: values.polish ? createLlm() : undefined },

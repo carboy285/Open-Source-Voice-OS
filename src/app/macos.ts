@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import type { TextInjector } from "../core/types.js";
+import type { InjectorCommand, TextInjector } from "../core/types.js";
 
 /** Runs a command and returns stdout. Replaceable so the macOS logic is testable off a Mac. */
 export type Exec = (command: string, args: string[], input?: string) => Promise<string>;
@@ -16,6 +16,8 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 const KEYSTROKE_V = 'tell application "System Events" to keystroke "v" using command down';
 const KEYSTROKE_C = 'tell application "System Events" to keystroke "c" using command down';
+const KEYSTROKE_A = 'tell application "System Events" to keystroke "a" using command down';
+const KEYSTROKE_Z = 'tell application "System Events" to keystroke "z" using command down';
 
 export const osascript = (exec: Exec, script: string) => exec("osascript", ["-e", script]);
 
@@ -75,6 +77,11 @@ export class MacInjector implements TextInjector {
 
   replaceSelection(text: string): Promise<void> {
     return this.insert(text); // pasting over a selection replaces it
+  }
+
+  /** "Scratch that" and "select all" become the usual Cmd+Z / Cmd+A keystrokes in the focused app. */
+  async command(name: InjectorCommand): Promise<void> {
+    await osascript(this.exec, name === "undo" ? KEYSTROKE_Z : KEYSTROKE_A);
   }
 }
 

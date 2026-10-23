@@ -1,6 +1,6 @@
 import type { AppContext, LlmProvider, TextInjector } from "../core/types.js";
 
-const FILLERS = /\b(?:um+|uh+|erm?|hmm+|you know|i mean)\b[,.]?\s*/gi;
+export const FILLERS = /\b(?:um+|uh+|erm?|hmm+|you know|i mean)\b[,.]?\s*/gi;
 
 const SPOKEN_PUNCTUATION: Array<[RegExp, string]> = [
   [/\s*\bnew paragraph\b[,.]?\s*/gi, "\n\n"],
