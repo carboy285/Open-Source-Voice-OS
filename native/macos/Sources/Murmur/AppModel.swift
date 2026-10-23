@@ -250,6 +250,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         core.handle("text.replaceRecent") { params, reply in
             reply(.success(["ok": RecentInsertion.replace(expected: params["expected"] as? String ?? "", with: params["replacement"] as? String ?? "")]))
         }
+        core.handle("text.selectAll") { _, reply in reply(.success(["ok": TextInserter.selectAll()])) }
         core.handle("context.capture") { _, reply in reply(.success(ContextCapture.capture())) }
         core.handle("secret.get") { params, reply in
             if let value = Keychain.get(params["key"] as? String ?? "") {

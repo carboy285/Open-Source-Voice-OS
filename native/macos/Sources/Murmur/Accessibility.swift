@@ -54,6 +54,15 @@ enum TextInserter {
 
     private static let log = Logger(subsystem: "app.murmur", category: "insert")
 
+    /// Selects everything in the focused field (⌘A), for the "select all" voice command.
+    static func selectAll() -> Bool {
+        guard CGPreflightPostEventAccess() else {
+            log.info("select all refused: no post-event permission")
+            return false
+        }
+        return postKey(0, flags: .maskCommand) // keycode 0 is A
+    }
+
     static func insert(_ text: String) -> Outcome {
         let trusted = AXIsProcessTrusted()
         let canPost = CGPreflightPostEventAccess()

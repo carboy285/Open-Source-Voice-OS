@@ -10,7 +10,7 @@ namespace Murmur
         public const int WH_KEYBOARD_LL = 13;
         public const int WM_KEYDOWN = 0x0100, WM_KEYUP = 0x0101, WM_SYSKEYDOWN = 0x0104, WM_SYSKEYUP = 0x0105;
         public const int VK_ESCAPE = 0x1B, VK_SHIFT = 0x10, VK_LSHIFT = 0xA0, VK_RSHIFT = 0xA1;
-        public const int VK_LCONTROL = 0xA2, VK_RCONTROL = 0xA3, VK_RMENU = 0xA5, VK_CONTROL = 0x11, VK_V = 0x56;
+        public const int VK_LCONTROL = 0xA2, VK_RCONTROL = 0xA3, VK_RMENU = 0xA5, VK_CONTROL = 0x11, VK_V = 0x56, VK_A = 0x41;
         public const int GWL_EXSTYLE = -20;
         public const int WS_EX_NOACTIVATE = 0x08000000, WS_EX_TOOLWINDOW = 0x00000080;
 

@@ -71,6 +71,7 @@ import {
   countSpoken,
   findShortcut,
   replaceSpokenText,
+  selectAllCommand,
   selectProfile,
   translateDictation,
 } from "../dictation/personalization.js";
@@ -110,6 +111,8 @@ export interface ShellBridge {
   insertText(text: string): Promise<{ ok: boolean; method: string; reason?: string }>;
   captureContext(): Promise<CapturedContext>;
   replaceRecent?(expected: string, replacement: string): Promise<{ ok: boolean }>;
+  /** Selects everything in the focused field. Absent on shells that cannot send ⌘A / Ctrl+A. */
+  selectAll?(): Promise<{ ok: boolean }>;
   secrets: SecretStore;
   approvals: ApprovalUi;
   emit(event: CoreEvent): void;
@@ -674,6 +677,20 @@ export class MurmurCore {
       if (command && (command.kind === "undo" || this.canCorrectRecent(command.from))) {
         this.lastAudio = undefined;
         return await this.correctRecent(command);
+      }
+      // Built-in editing command. Without a shell that can send the keystroke it is dictated like any other words.
+      if (selectAllCommand(transcript) && this.options.bridge.selectAll) {
+        this.lastAudio = undefined;
+        const selected = await this.options.bridge
+          .selectAll()
+          .then((result) => result.ok)
+          .catch(() => false);
+        this.emit(
+          selected
+            ? { type: "state", state: "done", message: this.t("voice.selected") }
+            : { type: "state", state: "error", message: this.t("voice.select_failed") },
+        );
+        return { text: "", changes: [], summary: [], category: "general", empty: true };
       }
       const shortcut = findShortcut(transcript, this.settings.get("voice.shortcuts"));
       if (shortcut?.kind === "task") {

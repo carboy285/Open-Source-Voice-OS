@@ -125,6 +125,7 @@ namespace Murmur
                 return new JsonObject { ["ok"] = ok, ["method"] = method };
             });
             Core.Handle("text.replaceRecent", async p => new JsonObject { ["ok"] = await RecentInsertion.Replace(p.Str("expected"), p.Str("replacement")) });
+            Core.Handle("text.selectAll", _ => Task.FromResult<JsonNode?>(new JsonObject { ["ok"] = TextInserter.SelectAll() }));
             Core.Handle("context.capture", async _ => await ContextCapture.Capture());
             Core.Handle("secret.get", p => Task.FromResult<JsonNode?>(new JsonObject { ["value"] = CredentialStore.Get(p.Str("key")) }));
             Core.Handle("secret.set", p =>

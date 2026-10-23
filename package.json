@@ -1,6 +1,6 @@
 {
   "name": "murmur",
-  "version": "0.2.8.6.1",
+  "version": "0.2.8.6.2",
   "description": "Open-source voice layer for macOS and Windows: dictation, a voice agent with an approval gate, connectors and MCP.",
   "type": "module",
   "main": "dist/index.js",

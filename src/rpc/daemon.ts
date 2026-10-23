@@ -58,6 +58,7 @@ export function rpcBridge(peer: JsonRpcPeer): ShellBridge & { approvals: RpcAppr
   return {
     insertText: (text) => peer.request("text.insert", { text }, 10_000),
     replaceRecent: (expected, replacement) => peer.request("text.replaceRecent", { expected, replacement }, 10000),
+    selectAll: () => peer.request("text.selectAll", {}, 3_000),
     captureContext: () => peer.request<CapturedContext>("context.capture", {}, 3_000),
     secrets: new RpcSecretStore(peer),
     approvals: new RpcApprovalUi(peer),

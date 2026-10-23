@@ -5,6 +5,7 @@ import {
   correctionCommand,
   findShortcut,
   replaceSpokenText,
+  selectAllCommand,
   selectProfile,
   translateDictation,
   DEFAULT_PROFILES,
@@ -26,12 +27,15 @@ function setup(
     context?: CapturedContext;
     placed?: boolean;
     replacementOk?: boolean;
+    selectAll?: boolean;
+    selectAllOk?: boolean;
   } = {},
 ) {
   const inserted: string[] = [],
     replacements: Array<[string, string]> = [],
     events: CoreEvent[] = [];
   let now = 1000;
+  let selectAlls = 0;
   const core = new MurmurCore({
     databasePath: ":memory:",
     mcpConfigPath: "/nonexistent/mcp.json",
@@ -48,6 +52,14 @@ function setup(
         replacements.push([expected, replacement]);
         return { ok: options.replacementOk ?? true };
       },
+      ...(options.selectAll === false
+        ? {}
+        : {
+            selectAll: async () => {
+              selectAlls++;
+              return { ok: options.selectAllOk ?? true };
+            },
+          }),
       secrets: new MemorySecretStore(),
       approvals: new ScriptedApprovalUi([]),
       emit: (event) => events.push(event),
@@ -59,6 +71,7 @@ function setup(
     inserted,
     replacements,
     events,
+    selectAlls: () => selectAlls,
     advance: (ms: number) => {
       now += ms;
     },
@@ -78,6 +91,16 @@ describe("voice shortcuts", () => {
     ];
     expect(findShortcut("my introduction!", shortcuts)?.content).toContain("\n");
     expect(findShortcut("please use my introduction", shortcuts)).toBeUndefined();
+  });
+  it("accepts “insert” before a text shortcut but not before a task shortcut", () => {
+    const shortcuts = [
+      { phrase: "my intro", kind: "text" as const, content: "Hi" },
+      { phrase: "daily wrap up", kind: "task" as const, content: "Summarize my day" },
+    ];
+    expect(findShortcut("Insert my intro.", shortcuts)?.content).toBe("Hi");
+    expect(findShortcut("insert", shortcuts)).toBeUndefined();
+    expect(findShortcut("insert daily wrap up", shortcuts)).toBeUndefined();
+    expect(findShortcut("insert nothing saved", shortcuts)).toBeUndefined();
   });
   it("inserts saved text verbatim without sending it through polish", async () => {
     const llm = new ScriptedLlm([]);
@@ -189,7 +212,19 @@ describe("voice corrections", () => {
       to: "Thursday",
     });
     expect(correctionCommand("undo my last dictation")).toEqual({ kind: "undo" });
-    expect(correctionCommand("undo that")).toBeUndefined();
+    expect(correctionCommand("undo that")).toEqual({ kind: "undo" });
+    expect(correctionCommand("Scratch that!")).toEqual({ kind: "undo" });
+    expect(correctionCommand("please scratch that")).toBeUndefined();
+    expect(selectAllCommand("Select all.")).toBe(true);
+    expect(selectAllCommand("select all the rows")).toBe(false);
+  });
+  it('scratches the last dictation when asked to "scratch that"', async () => {
+    const s = setup();
+    await s.core.finishDictation({ transcript: "the meeting is Tuesday" });
+    await s.core.finishDictation({ transcript: "scratch that" });
+    expect(s.replacements).toEqual([["The meeting is Tuesday.", ""]]);
+    expect(s.inserted).toHaveLength(1);
+    expect(s.events).toContainEqual({ type: "state", state: "done", message: "Last dictation updated" });
   });
   it("matches literal phrases at word boundaries and rejects ambiguous replacements", () => {
     expect(replaceSpokenText("Use C++ today.", "C++", "Rust")).toBe("Use Rust today.");
@@ -236,6 +271,36 @@ describe("voice corrections", () => {
     const moved = setup({ replacementOk: false });
     await moved.core.finishDictation({ transcript: "Tuesday" });
     await expect(moved.core.finishDictation({ transcript: "undo last dictation" })).rejects.toThrow("cursor has moved");
+  });
+});
+
+describe("select all command", () => {
+  it("selects the focused field instead of typing the phrase or a shortcut with the same name", async () => {
+    const s = setup();
+    s.core.settings.set("voice.shortcuts", [{ phrase: "select all", kind: "text", content: "oops" }]);
+    const outcome = await s.core.finishDictation({ transcript: "Select all." });
+    expect(outcome).toMatchObject({ text: "", empty: true });
+    expect(s.selectAlls()).toBe(1);
+    expect(s.inserted).toEqual([]);
+    expect(s.events).toContainEqual({ type: "state", state: "done", message: "Selected all" });
+  });
+  it("is dictated normally when the shell cannot send the keystroke", async () => {
+    const s = setup({ selectAll: false });
+    await s.core.finishDictation({ transcript: "select all" });
+    expect(s.selectAlls()).toBe(0);
+    expect(s.inserted).toEqual(["Select all."]);
+  });
+  it("reports a failed selection without typing the phrase", async () => {
+    const s = setup({ selectAllOk: false });
+    await s.core.finishDictation({ transcript: "select all" });
+    expect(s.inserted).toEqual([]);
+    expect(s.events).toContainEqual(
+      expect.objectContaining({
+        type: "state",
+        state: "error",
+        message: "Couldn't select all. Check Accessibility and Input Monitoring.",
+      }),
+    );
   });
 });
 

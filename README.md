@@ -97,7 +97,7 @@ terminal. The `clean "<text>"` command remains available for a quick cleanup and
 
 ## Personalize your voice tools
 
-Open Settings › Personalize to save voice shortcuts, choose a writing profile, or translate dictation into another language. Settings › Dictation controls the local live preview. Say “change Tuesday to Thursday” or “undo my last dictation” within two minutes to correct the last inserted passage while the cursor is still in place.
+Open Settings › Personalize to save voice shortcuts, choose a writing profile, or translate dictation into another language. Settings › Dictation controls the local live preview. Say a shortcut's phrase, or “insert” and the phrase, to type saved text. Within two minutes, say “change Tuesday to Thursday”, “scratch that” or “undo my last dictation” to correct the last insertion, or “select all” to select the focused field.
 
 First-run setup now includes a guided introduction, permission checks, model setup and a practice area. See [Voice tools and guided setup](docs/PERSONALIZATION.md) for usage, limits and acceptance checks.
 

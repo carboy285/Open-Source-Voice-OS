@@ -73,7 +73,13 @@ export const normalizePhrase = (text: string): string =>
     .trim();
 export function findShortcut(text: string, shortcuts: VoiceShortcut[]): VoiceShortcut | undefined {
   const phrase = normalizePhrase(text);
-  return phrase ? shortcuts.find((s) => normalizePhrase(s.phrase) === phrase) : undefined;
+  if (!phrase) return undefined;
+  const exact = shortcuts.find((s) => normalizePhrase(s.phrase) === phrase);
+  if (exact) return exact;
+  // "insert my address" is a natural way to ask for a text shortcut. Task shortcuts keep their exact phrase only.
+  const inserted = phrase.replace(/^insert\s+/u, "");
+  if (inserted === phrase) return undefined;
+  return shortcuts.find((s) => s.kind === "text" && normalizePhrase(s.phrase) === inserted);
 }
 export function selectProfile(
   context: AppContext,
@@ -131,9 +137,14 @@ export function correctionCommand(
   text: string,
 ): { kind: "undo" } | { kind: "replace"; from: string; to: string } | undefined {
   const clean = text.trim().replace(/[.!?]+$/u, "");
-  if (/^undo (?:my )?last dictation$/i.test(clean)) return { kind: "undo" };
+  if (/^(?:undo (?:my )?last dictation|undo that|scratch that)$/i.test(clean)) return { kind: "undo" };
   const match = /^change (.+?) to (.+)$/i.exec(clean);
   return match ? { kind: "replace", from: match[1]!, to: match[2]! } : undefined;
+}
+
+/** "select all" is a built-in command. It only fires when the shell can press ⌘A / Ctrl+A. */
+export function selectAllCommand(text: string): boolean {
+  return /^select all$/i.test(text.trim().replace(/[.!?]+$/u, ""));
 }
 function spokenExpression(from: string): RegExp {
   const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

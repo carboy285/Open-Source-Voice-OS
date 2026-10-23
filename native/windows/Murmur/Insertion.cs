@@ -39,6 +39,11 @@ namespace Murmur
             return (false, "clipboard");
         }
 
+        /// <summary>Selects everything in the focused field (Ctrl+A), for the "select all" voice command.</summary>
+        public static bool SelectAll() => Native.Send(
+            Native.Key(Native.VK_CONTROL, false), Native.Key(Native.VK_A, false),
+            Native.Key(Native.VK_A, true), Native.Key(Native.VK_CONTROL, true));
+
         /// <summary>Saves the clipboard, pastes with Ctrl+V and restores the clipboard 500 ms later.</summary>
         private static async Task<bool> Paste(string text)
         {
