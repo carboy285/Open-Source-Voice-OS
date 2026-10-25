@@ -44,15 +44,19 @@ final class WindowManager: NSObject, NSWindowDelegate {
     func showPanel() {
         panelHide?.cancel()
         if panel == nil {
+            let local = Bundle.main.object(forInfoDictionaryKey: "MurmurLocalBuild") as? Bool == true
             let window = KeyablePanel(
                 contentRect: NSRect(x: 0, y: 0, width: WindowManager.panelWidth, height: 600),
-                styleMask: [.borderless, .nonactivatingPanel],
+                styleMask: local ? [.titled, .closable, .miniaturizable, .resizable] : [.borderless, .nonactivatingPanel],
                 backing: .buffered,
                 defer: false
             )
-            window.isFloatingPanel = true
+            window.title = "Murmur — Tasks & results"
+            window.isReleasedWhenClosed = false
+            window.minSize = NSSize(width: 380, height: 400)
+            window.isFloatingPanel = !local
             window.becomesKeyOnlyIfNeeded = true
-            window.level = .floating
+            window.level = local ? .normal : .floating
             window.backgroundColor = .clear
             window.isOpaque = false
             window.hasShadow = false
@@ -70,6 +74,10 @@ final class WindowManager: NSObject, NSWindowDelegate {
             )
         }
         window.orderFrontRegardless()
+        if Bundle.main.object(forInfoDictionaryKey: "MurmurLocalBuild") as? Bool == true {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        }
     }
 
     /// Orders the panel out once its slide-out has settled, unless it was reopened in the meantime.

@@ -43,6 +43,7 @@ import {
 } from "../providers/catalog.js";
 import { CloudStt } from "../providers/cloud-stt.js";
 import { CloudTts, type Speech } from "../providers/cloud-tts.js";
+import { WhisperServerStt } from "../providers/whisper-server.js";
 import { WhisperCppStt } from "../providers/whisper-cpp.js";
 import { ReminderScheduler } from "../reminders/scheduler.js";
 import { localTimeZone } from "../reminders/time.js";
@@ -88,6 +89,16 @@ export type DictationState = "idle" | "listening" | "transcribing" | "cleaning" 
 
 export type CoreEvent =
   | { type: "state"; state: DictationState; step?: string; message?: string }
+  | {
+      type: "recovery.result";
+      id: string;
+      mode: "dictate" | "edit";
+      transcript: string;
+      text: string;
+      status: string;
+      error?: string;
+      at: number;
+    }
   | { type: "dictation.task" }
   | { type: "dictation.result"; text: string; changes: Change[]; summary: ChangeSummary[]; category: AppCategory }
   | ({ type: "task.update" } & TaskUpdate)
@@ -108,8 +119,12 @@ export interface ChangeSummary {
 
 /** Everything OS-specific the core asks the shell for. */
 export interface ShellBridge {
-  insertText(text: string): Promise<{ ok: boolean; method: string; reason?: string }>;
+  insertText(
+    text: string,
+    options?: { guardTarget?: boolean },
+  ): Promise<{ ok: boolean; method: string; reason?: string }>;
   captureContext(): Promise<CapturedContext>;
+  previewEdit?(before: string, after: string): Promise<boolean>;
   replaceRecent?(expected: string, replacement: string): Promise<{ ok: boolean }>;
   /** Selects everything in the focused field. Absent on shells that cannot send ⌘A / Ctrl+A. */
   selectAll?(): Promise<{ ok: boolean }>;
@@ -166,6 +181,8 @@ export class MurmurCore {
   private readonly clock: Clock;
   private readonly dbPath: string;
   private readonly mcpPath: string;
+  private persistentStt?: { key: string; provider: WhisperServerStt };
+  private dictationController = new AbortController();
   private pendingContext?: Promise<CapturedContext>;
   private dictationStarted = 0;
   private lastAudio?: Pcm16Audio;
@@ -441,6 +458,17 @@ export class MurmurCore {
     }
     const model = this.settings.get("stt.model");
     if (!model) return undefined;
+    if (this.settings.get("stt.keepLoaded")) {
+      const binary = this.settings.get("stt.serverBinary");
+      const key = `${binary}|${model}`;
+      if (this.persistentStt?.key !== key) {
+        this.persistentStt?.provider.close();
+        this.persistentStt = { key, provider: new WhisperServerStt(model, binary) };
+      }
+      return this.persistentStt.provider;
+    }
+    this.persistentStt?.provider.close();
+    this.persistentStt = undefined;
     return new WhisperCppStt({ binary: this.settings.get("stt.binary") || "whisper-cli", model });
   }
 
@@ -556,6 +584,8 @@ export class MurmurCore {
 
   /** Hotkey down: capture context now, while the user's app is still focused. */
   beginDictation(): void {
+    this.dictationController.abort();
+    this.dictationController = new AbortController();
     this.previewController?.abort();
     this.previewGeneration++;
     this.dictationStarted = this.clock.now();
@@ -564,8 +594,10 @@ export class MurmurCore {
   }
 
   cancelDictation(): void {
+    this.dictationController.abort();
     this.previewController?.abort();
     this.previewGeneration++;
+    this.persistentStt?.provider.close();
     this.pendingContext = undefined;
     this.lastAudio = undefined;
     this.emit({ type: "state", state: "idle" });
@@ -648,6 +680,17 @@ export class MurmurCore {
 
   /** Hotkey up: transcribe, clean, insert and report. Audio is kept in memory only for a retry after a failed transcription. */
   async finishDictation(input: { audio?: Pcm16Audio; transcript?: string }): Promise<DictationOutcome> {
+    const signal = this.dictationController.signal;
+    const recovery = {
+      type: "recovery.result" as const,
+      id: randomUUID(),
+      at: this.clock.now(),
+      mode: "dictate" as const,
+      transcript: input.transcript ?? "",
+      text: "",
+      status: "failed",
+      error: undefined as string | undefined,
+    };
     this.previewController?.abort();
     this.previewGeneration++;
     await this.previewJob;
@@ -656,16 +699,20 @@ export class MurmurCore {
     this.pendingContext = undefined;
     const audio = input.audio ?? this.lastAudio;
     try {
+      signal.throwIfAborted();
       let transcript = input.transcript;
       let language: string | undefined;
       if (transcript === undefined) {
         if (!audio) throw new StepError("transcribing", this.t("report.didnt_catch"));
         this.lastAudio = audio;
         this.emit({ type: "state", state: "transcribing" });
-        ({ text: transcript, language } = await this.transcribe(audio));
+        ({ text: transcript, language } = await this.transcribe(audio, signal));
       }
 
+      signal.throwIfAborted();
+      recovery.transcript = transcript;
       if (context.secure) {
+        recovery.transcript = "";
         this.lastAudio = undefined;
         this.emit({ type: "notify", title: this.t("app.name"), body: this.t("report.secure_field"), kind: "warning" });
         this.emit({ type: "state", state: "idle" });
@@ -675,11 +722,13 @@ export class MurmurCore {
       // "Change the meeting to Thursday" is also an ordinary sentence. It is only a correction when there is a recent
       // dictation that contains exactly that phrase once; otherwise it is typed like any other dictation.
       if (command && (command.kind === "undo" || this.canCorrectRecent(command.from))) {
+        recovery.transcript = "";
         this.lastAudio = undefined;
         return await this.correctRecent(command);
       }
       // Built-in editing command. Without a shell that can send the keystroke it is dictated like any other words.
       if (selectAllCommand(transcript) && this.options.bridge.selectAll) {
+        recovery.transcript = "";
         this.lastAudio = undefined;
         const selected = await this.options.bridge
           .selectAll()
@@ -694,13 +743,15 @@ export class MurmurCore {
       }
       const shortcut = findShortcut(transcript, this.settings.get("voice.shortcuts"));
       if (shortcut?.kind === "task") {
+        recovery.transcript = "";
         this.lastAudio = undefined;
         this.emit({ type: "dictation.task" });
         await this.startTask({ transcript: shortcut.content, context });
         return { text: "", changes: [], summary: [], category: "general", empty: true };
       }
       this.emit({ type: "state", state: "cleaning" });
-      const llm = await this.llm();
+      const llm = this.cancellableModel(await this.llm(), signal);
+      const mode = this.settings.get("dictation.cleanupMode") as "verbatim" | "clean" | "polished";
       const profile = selectProfile(
         context,
         this.settings.get("writing.profiles"),
@@ -709,6 +760,7 @@ export class MurmurCore {
       const result = shortcut
         ? { text: shortcut.content, changes: [], appliedIds: [], category: categorize(context) }
         : await processDictation(transcript, context, {
+            mode,
             dictionary: this.dictionary.list(),
             spokenPunctuation: this.settings.get("dictation.spokenPunctuation"),
             language,
@@ -720,6 +772,8 @@ export class MurmurCore {
       if (result.text && this.settings.get("dictation.outputMode") === "translate") {
         result.text = await translateDictation(result.text, this.settings.get("dictation.targetLanguage"), llm);
       }
+      signal.throwIfAborted();
+      recovery.text = result.text;
       this.dictionary.recordUses(result.appliedIds);
 
       if (!result.text) {
@@ -731,12 +785,19 @@ export class MurmurCore {
       this.lastAudio = undefined;
       this.emit({ type: "state", state: "inserting" });
       const inserted = await this.options.bridge
-        .insertText(result.text)
+        .insertText(result.text, { guardTarget: true })
         .catch((): { ok: boolean; method: string; reason?: string } => ({ ok: false, method: "none" }));
+      signal.throwIfAborted();
+      recovery.status = inserted.ok ? "inserted" : "ready";
       this.recentDictation = inserted.ok ? { text: result.text, at: this.clock.now() } : undefined;
       const notPlaced = !inserted.ok && inserted.reason !== "secure";
       if (notPlaced) {
-        this.emit({ type: "notify", title: this.t("app.name"), body: this.t("report.copied"), kind: "warning" });
+        this.emit({
+          type: "notify",
+          title: this.t("app.name"),
+          body: this.t(inserted.reason === "target_changed" ? "report.destination_changed" : "report.copied"),
+          kind: "warning",
+        });
       }
       const durationMs = audio
         ? (audio.pcm.byteLength / 2 / audio.sampleRate) * 1000
@@ -751,15 +812,26 @@ export class MurmurCore {
         category: result.category,
       });
       // A failed insert must be visible in the app itself, not only in a notification that may be switched off.
-      if (notPlaced) this.emit({ type: "state", state: "error", step: "inserting", message: this.t("report.copied") });
+      if (notPlaced)
+        this.emit({
+          type: "state",
+          state: "error",
+          step: "inserting",
+          message: this.t(inserted.reason === "target_changed" ? "report.destination_changed" : "report.copied"),
+        });
       else this.emit({ type: "state", state: "done" });
       return { text: result.text, changes: result.changes, summary, category: result.category, inserted };
     } catch (error) {
+      recovery.status = signal.aborted ? "cancelled" : recovery.text ? "ready" : "failed";
+      recovery.error = signal.aborted ? "Cancelled" : (error as Error).message;
+      if (signal.aborted) return { text: "", changes: [], summary: [], category: "general", empty: true };
       const step = error instanceof StepError ? error.step : "cleaning";
       const message = error instanceof PersonalizationError ? this.t(error.key) : (error as Error).message;
       this.emit({ type: "state", state: "error", step, message });
       if (error instanceof PersonalizationError) throw new StepError(step, message);
       throw error;
+    } finally {
+      if (recovery.transcript || recovery.text || recovery.error) this.emit(recovery);
     }
   }
 
@@ -794,24 +866,81 @@ export class MurmurCore {
     /** The app and selection captured before a typing box took focus. */
     context?: CapturedContext;
   }): Promise<{ text: string }> {
-    const llm = await this.llm();
-    if (!llm) throw new Error(this.t("agent.no_llm"));
-    const instruction = input.transcript ?? (input.audio ? (await this.transcribe(input.audio)).text : "");
-    const context =
-      input.context ?? ((await (this.pendingContext ?? this.options.bridge.captureContext())) as CapturedContext);
-    this.pendingContext = undefined;
-    const bridge = this.options.bridge;
-    const text = await editSelection(
-      instruction,
-      {
-        insert: async (t) => void (await bridge.insertText(t)),
-        getSelection: async () => context.selection ?? "",
-        replaceSelection: async (t) => void (await bridge.insertText(t)),
-      },
-      llm,
-    );
-    this.emit({ type: "state", state: "done" });
-    return { text };
+    const signal = this.dictationController.signal;
+    const recovery = {
+      type: "recovery.result" as const,
+      id: randomUUID(),
+      at: this.clock.now(),
+      mode: "edit" as const,
+      transcript: input.transcript ?? "",
+      text: "",
+      status: "failed",
+      error: undefined as string | undefined,
+    };
+    try {
+      signal.throwIfAborted();
+      const context = input.context ?? (await (this.pendingContext ?? this.options.bridge.captureContext()));
+      this.pendingContext = undefined;
+      if (context.secure) throw new Error("Cannot edit a secure field.");
+      const llm = this.cancellableModel(await this.llm(), signal);
+      if (!llm) throw new Error(this.t("agent.no_llm"));
+      this.emit({ type: "state", state: "transcribing" });
+      const instruction = input.transcript ?? (input.audio ? (await this.transcribe(input.audio, signal)).text : "");
+      recovery.transcript = instruction;
+      signal.throwIfAborted();
+      this.emit({ type: "state", state: "cleaning" });
+      await editSelection(
+        instruction,
+        {
+          insert: async (text) => {
+            recovery.text = text;
+          },
+          getSelection: async () => context.selection ?? "",
+          replaceSelection: async (text) => {
+            recovery.text = text;
+          },
+        },
+        llm,
+      );
+      signal.throwIfAborted();
+      recovery.status = "ready";
+      const approved = this.options.bridge.previewEdit
+        ? await untilCancelled(this.options.bridge.previewEdit(context.selection ?? "", recovery.text), signal)
+        : true;
+      signal.throwIfAborted();
+      if (approved) {
+        this.emit({ type: "state", state: "inserting" });
+        const result = await this.options.bridge.insertText(recovery.text, { guardTarget: true });
+        if (!result.ok)
+          throw new Error(this.t(result.reason === "target_changed" ? "report.destination_changed" : "report.copied"));
+        recovery.status = "inserted";
+      }
+      this.emit({ type: "state", state: "done" });
+      return { text: recovery.text };
+    } catch (error) {
+      recovery.status = signal.aborted ? "cancelled" : recovery.text ? "ready" : "failed";
+      recovery.error = signal.aborted ? "Cancelled" : (error as Error).message;
+      if (signal.aborted) return { text: "" };
+      throw error;
+    } finally {
+      this.emit(recovery);
+    }
+  }
+
+  private cancellableModel(llm: LlmProvider | undefined, signal: AbortSignal): LlmProvider | undefined {
+    return llm
+      ? {
+          ...llm,
+          supportsImages: llm.supportsImages,
+          complete: (request) => {
+            signal.throwIfAborted();
+            return untilCancelled(
+              llm.complete({ ...request, signal: request.signal ? AbortSignal.any([signal, request.signal]) : signal }),
+              signal,
+            );
+          },
+        }
+      : undefined;
   }
 
   // Agent
@@ -900,6 +1029,8 @@ export class MurmurCore {
   }
 
   async close(): Promise<void> {
+    this.dictationController.abort();
+    this.persistentStt?.provider.close();
     await this.agents.close();
     this.scheduler.stop();
     await this.mcp.close();
@@ -924,4 +1055,23 @@ export class StepError extends Error {
   ) {
     super(message);
   }
+}
+
+/** Late responses are observed but cannot continue a cancelled desktop request. */
+function untilCancelled<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(new Error("Cancelled"));
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      },
+    );
+    if (signal.aborted) abort();
+    else signal.addEventListener("abort", abort, { once: true });
+  });
 }

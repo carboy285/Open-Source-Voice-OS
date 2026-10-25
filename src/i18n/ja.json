@@ -462,5 +462,6 @@
   "settings.tts.confirm.button": "使う",
   "tts.cloud_failed": "クラウド音声が使えなかったため、Mac の音声で読み上げました: {error}",
   "settings.cloud_stt.function_id": "Function ID",
-  "settings.cloud_stt.function_help": "build.nvidia.com のモデルページで Parakeet を開き、「Get API Key」に表示される function ID をコピーしてください。キーと一緒にリクエストごとに送信されます。"
+  "settings.cloud_stt.function_help": "build.nvidia.com のモデルページで Parakeet を開き、「Get API Key」に表示される function ID をコピーしてください。キーと一緒にリクエストごとに送信されます。",
+  "report.destination_changed": "入力先が変わりました。タスクと結果からテキストをコピーまたは再挿入してください。"
 }

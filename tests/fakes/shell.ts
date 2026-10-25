@@ -12,6 +12,7 @@ export function fakeShell() {
   const wire: string[] = [];
   toCore.on("data", (d: Buffer) => wire.push(...d.toString().split("\n").filter(Boolean)));
   shell
+    .handle("text.preview", () => ({ approved: true }))
     .handle("text.insert", (p) => {
       inserted.push(String(p.text));
       return { ok: true, method: "accessibility" };

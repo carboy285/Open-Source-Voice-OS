@@ -5,6 +5,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         AppModel.shared.start()
+        if Bundle.main.object(forInfoDictionaryKey: "MurmurLocalBuild") as? Bool == true { AppModel.shared.showPanel() }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        AppModel.shared.showPanel()
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -62,7 +68,7 @@ struct MenuContent: View {
             .keyboardShortcut("t", modifiers: [.control, .option])
         Button(L("menu.chat")) { model.openChat() }
         Button(L("menu.new_chat")) { model.newChat() }
-        Button(L("menu.tasks")) { model.showPanel() }
+        Button("Tasks & results") { model.showPanel() }
             .keyboardShortcut("t")
         Menu(L("menu.approvals")) {
             let mode = model.settings["approval.mode"] as? String ?? "ask"

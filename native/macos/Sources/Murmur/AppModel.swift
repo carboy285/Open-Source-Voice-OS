@@ -102,6 +102,11 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     @Published var tasks: [String: TaskInfo] = [:] { didSet { windows.updateNotch() } }
     @Published var history: [TaskInfo] = []
     @Published var recent: [String] = []
+    @Published var recovery: [RecoveryEntry] = []
+    @Published var editReview: EditReview?
+    private var insertionTarget: InsertionTarget?
+    private var queuedRecovery: (entry: RecoveryEntry, retry: Bool)?
+    private var replayOnRelease: (entry: RecoveryEntry, retry: Bool)?
     @Published var settings: JSONObject = [:]
     @Published var connectors: [ConnectorInfo] = []
     @Published var mcpServers: [McpServerInfo] = []
@@ -139,6 +144,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     @Published var axStatus = Permissions.accessibility
     @Published var screenStatus = Permissions.screenRecording
 
+    private let keychainQueue = DispatchQueue(label: "murmur.keychain")
     let core = CoreClient()
     lazy var speech = SpeechModelStore(core: core)
     let hotkey = HotkeyMonitor()
@@ -173,7 +179,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         updater.onFound = { [weak self] version in
             self?.postNotification(title: L("update.available", ["version": version]), body: L("update.notify_body"))
         }
-        updater.startAutomaticChecks()
+        if Bundle.main.object(forInfoDictionaryKey: "MurmurLocalBuild") as? Bool != true { updater.startAutomaticChecks() }
         speech.onFinished = { [weak self] info in
             self?.postNotification(title: L("models.ready", ["name": info.name]), body: L("models.ready_body"))
         }
@@ -192,7 +198,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
         speaker.onChange = { [weak self] speaking in self?.speaking = speaking }
         hotkey.onEscape = { [weak self] in
-            self?.cancelListening()
+            self?.cancelCurrentRequest()
             self?.cancelCircle()
         }
         hotkey.onTypeShortcut = { [weak self] in self?.toggleTyping() }
@@ -239,7 +245,17 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     }
 
     private func registerCoreHandlers() {
+        core.handle("text.preview") { [weak self] params, reply in
+            guard let self else { reply(.success(["approved": false])); return }
+            self.editReview = EditReview(before: params["before"] as? String ?? "", after: params["after"] as? String ?? "", reply: reply)
+            self.showPanel()
+        }
         core.handle("text.insert") { params, reply in
+            if params["guardTarget"] as? Bool == true, !self.windows.onboardingIsKey,
+               self.insertionTarget?.isCurrent != true {
+                reply(.success(["ok": false, "method": "none", "reason": "target_changed"]))
+                return
+            }
             let result = TextInserter.insert(params["text"] as? String ?? "")
             RecentInsertion.remember(params["text"] as? String ?? "", ok: result.ok)
             if result.ok, self.windows.onboardingIsKey { self.setupInserted = true }
@@ -250,25 +266,29 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         core.handle("text.replaceRecent") { params, reply in
             reply(.success(["ok": RecentInsertion.replace(expected: params["expected"] as? String ?? "", with: params["replacement"] as? String ?? "")]))
         }
-        core.handle("text.selectAll") { _, reply in reply(.success(["ok": TextInserter.selectAll()])) }
+        core.handle("text.selectAll") { _, reply in reply(.success(["ok": self.insertionTarget?.isCurrent == true && TextInserter.selectAll()])) }
         core.handle("context.capture") { _, reply in reply(.success(ContextCapture.capture())) }
         core.handle("secret.get") { params, reply in
-            if let value = Keychain.get(params["key"] as? String ?? "") {
-                reply(.success(["value": value]))
-            } else {
-                reply(.success(["value": NSNull()]))
+            let key = params["key"] as? String ?? ""
+            self.keychainQueue.async {
+                if let value = Keychain.get(key) { reply(.success(["value": value])) }
+                else { reply(.success(["value": NSNull()])) }
             }
         }
         core.handle("secret.set") { params, reply in
-            switch Keychain.save(params["key"] as? String ?? "", params["value"] as? String ?? "") {
-            case .success: reply(.success(["ok": true]))
-            case let .failure(error):
-                reply(.failure(CoreError.remote(code: -1, message: "Keychain write failed: \(error.localizedDescription)")))
+            let key = params["key"] as? String ?? ""
+            let value = params["value"] as? String ?? ""
+            self.keychainQueue.async {
+                switch Keychain.save(key, value) {
+                case .success: reply(.success(["ok": true]))
+                case let .failure(error):
+                    reply(.failure(CoreError.remote(code: -1, message: "Keychain write failed: \(error.localizedDescription)")))
+                }
             }
         }
         core.handle("secret.delete") { params, reply in
-            Keychain.delete(params["key"] as? String ?? "")
-            reply(.success(["ok": true]))
+            let key = params["key"] as? String ?? ""
+            self.keychainQueue.async { Keychain.delete(key); reply(.success(["ok": true])) }
         }
         core.handle("apple.call") { params, reply in
             AppleBridge.call(
@@ -317,6 +337,15 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     @discardableResult
     private func hotkeyDown(_ action: HotkeyAction) -> Bool {
         guard !setupRecording, !setupBusy else { return false }
+        guard ![ShellState.transcribing, .cleaning, .inserting].contains(state), editReview == nil else { return false }
+        insertionTarget = InsertionTarget.capture()
+        if let queued = queuedRecovery, action == .dictate {
+            queuedRecovery = nil
+            replayOnRelease = queued
+            self.action = queued.entry.mode == "edit" && queued.retry ? .edit : .dictate
+            state = .listening
+            return true
+        }
         // A press during the release tail of the previous recording is ignored.
         guard state != .starting, !audio.isRecording else { return false }
         // Talking over the reply, and the microphone hearing it, are both worse than stopping it.
@@ -348,6 +377,23 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     }
 
     private func hotkeyUp() {
+        if let replay = replayOnRelease {
+            replayOnRelease = nil
+            core.request("dictation.start")
+            if replay.retry {
+                state = .cleaning
+                let method = replay.entry.mode == "edit" ? "edit.run" : "dictation.stop"
+                let params: JSONObject = replay.entry.transcript.isEmpty ? [:] : ["transcript": replay.entry.transcript]
+                core.request(replay.entry.transcript.isEmpty ? "dictation.retry" : method, params, timeout: 300) { [weak self] result in
+                    if case let .failure(error) = result { self?.showError(error.localizedDescription) }
+                }
+            } else if insertionTarget?.isCurrent == true {
+                let result = TextInserter.insert(replay.entry.text)
+                RecentInsertion.remember(replay.entry.text, ok: result.ok)
+                if result.ok { state = .idle } else { showError(L("report.copied")) }
+            } else { showError(L("report.destination_changed")) }
+            return
+        }
         stopLivePreview()
         if action == .circle {
             // Letting go before drawing cancels; letting go mid-drag still finishes when the mouse is released.
@@ -379,7 +425,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                 if case let .failure(error) = result { self?.showError(error.localizedDescription) }
             }
         case .edit:
-            core.request("edit.run", audioParams, timeout: 60) { [weak self] result in
+            core.request("edit.run", audioParams, timeout: 300) { [weak self] result in
                 switch result {
                 case .success: self?.finishQuietly()
                 case let .failure(error): self?.showError(error.localizedDescription)
@@ -469,6 +515,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     func openTyping(_ mode: TypingMode) {
         guard state != .listening, !audio.isRecording else { return }
         speaker.stop()
+        insertionTarget = InsertionTarget.capture()
         typingContext = ContextCapture.capture()
         typingFrontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
         typingAttachScreen = settings["screen.attach"] as? Bool ?? false
@@ -548,9 +595,10 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                 }
             }
         case .edit:
+            core.request("dictation.start")
             action = .edit
             state = .cleaning
-            core.request("edit.run", ["transcript": request, "context": context], timeout: 120) { [weak self] result in
+            core.request("edit.run", ["transcript": request, "context": context], timeout: 300) { [weak self] result in
                 switch result {
                 case .success: self?.finishQuietly()
                 case let .failure(error): self?.showError(error.localizedDescription)
@@ -716,22 +764,67 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
 
     func stopSpeaking() { speaker.stop() }
 
+    func cancelCurrentRequest() {
+        cancelListening()
+        if let task = activeTasks.first { cancelTask(task.id) }
+    }
+
     func cancelListening() {
+        queuedRecovery = nil
+        replayOnRelease = nil
+        reviewEdit(false)
         stopLivePreview()
         _ = audio.stop()
         core.request("dictation.cancel")
         state = .idle
     }
 
+    func reviewEdit(_ allow: Bool) {
+        guard let review = editReview else { return }
+        editReview = nil
+        if allow {
+            hidePanel()
+            insertionTarget?.restore()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { review.reply(.success(["approved": true])) }
+        } else { review.reply(.success(["approved": false])) }
+    }
+
+    func recover(_ entry: RecoveryEntry, retry: Bool) {
+        guard ![ShellState.listening, .transcribing, .cleaning, .inserting].contains(state), editReview == nil else { return }
+        queuedRecovery = (entry, retry)
+        hidePanel()
+        notice = "Focus the destination\(retry && entry.mode == "edit" ? " and select text" : ""), then press and release \(hotkeyName). Escape cancels."
+        reportMessage = notice
+        showReport(seconds: 10)
+    }
+
+    func clearRecovery() {
+        recovery = []
+        queuedRecovery = nil
+    }
+
+    func askFromPanel(_ text: String) {
+        let request = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !request.isEmpty else { return }
+        action = .agent
+        state = .agent
+        core.request("agent.run", ["transcript": request], timeout: 120) { [weak self] result in
+            if case let .failure(error) = result { self?.showError(error.localizedDescription) }
+        }
+    }
+
     func retryDictation() {
         reportVisible = false
         state = .transcribing
+        insertionTarget = InsertionTarget.capture()
+        core.request("dictation.start")
         core.request("dictation.retry") { [weak self] result in
             if case let .failure(error) = result { self?.showError(error.localizedDescription) }
         }
     }
 
     private func finishQuietly() {
+        guard !audio.isRecording else { return }
         state = .idle
     }
 
@@ -835,6 +928,14 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                 reportMessage = params["message"] as? String
                 report = []
                 showReport(seconds: 8)
+            }
+        case "recovery.result":
+            if let entry = RecoveryEntry(params) {
+                recovery.insert(entry, at: 0)
+                let keep = settings["recovery.sessionHistory"] as? Bool ?? false
+                let limit = keep ? min(100, max(1, settings["recovery.limit"] as? Int ?? 20)) : 1
+                recovery = Array(recovery.prefix(limit))
+                if entry.status == "ready" || entry.status == "failed" { showPanel() }
             }
         case "dictation.task":
             action = .agent
@@ -959,6 +1060,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         _ key: String, _ value: Any, then: ((JSONObject) -> Void)? = nil, failed: ((String) -> Void)? = nil
     ) {
         settings[key] = value
+        if key == "recovery.sessionHistory", value as? Bool != true { recovery = Array(recovery.prefix(1)) }
         if key == "dictation.toggleMode" { hotkey.toggleMode = value as? Bool ?? false }
         core.request("settings.set", ["key": key, "value": value]) { [weak self] result in
             switch result {

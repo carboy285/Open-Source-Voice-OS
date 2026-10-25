@@ -353,19 +353,20 @@ describe("live previews and setup practice", () => {
 describe("preview cancellation at release", () => {
   it("aborts unfinished preview recognition and transcribes the final recording", async () => {
     let aborted = false;
+    let recognitionCalls = 0;
     const s = setup({
       stt: {
-        // Only a preview carries a signal; the final recording is transcribed without one.
+        // Both preview and final recognition are cancellable; the second call is the final recording.
         transcribe: async (_audio, options) => {
           const signal = options?.signal;
-          if (!signal) return { text: "the complete sentence" };
+          if (++recognitionCalls > 1) return { text: "the complete sentence" };
           return await new Promise((_resolve, reject) => {
             const stop = () => {
               aborted = true;
               reject(new Error("cancelled"));
             };
-            if (signal.aborted) stop();
-            else signal.addEventListener("abort", stop);
+            if (signal?.aborted) stop();
+            else signal?.addEventListener("abort", stop);
           });
         },
       },
