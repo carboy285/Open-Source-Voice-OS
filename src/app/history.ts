@@ -1,4 +1,15 @@
+import { z } from "zod";
 import type { VoiceResult } from "./session.js";
+
+const Stored = z.array(z.object({
+  id: z.string(), at: z.number(), mode: z.enum(["dictate", "edit", "agent"]), transcript: z.string(), text: z.string(),
+  status: z.enum(["inserted", "ready", "failed", "cancelled", "completed"]), error: z.string().optional(),
+}));
+
+/** Reads saved results, dropping anything malformed rather than failing startup. */
+export function parseStoredHistory(json: string): VoiceResult[] {
+  try { return Stored.parse(JSON.parse(json)); } catch { return []; }
+}
 
 /** Memory-only, bounded history. With history off only the latest result is retained for recovery. */
 export class ResultHistory {
@@ -15,4 +26,5 @@ export class ResultHistory {
   list(): VoiceResult[] { return this.entries.map((entry) => ({ ...entry })); }
   get(id: string): VoiceResult | undefined { return this.list().find((entry) => entry.id === id); }
   clear(): void { this.entries = []; }
+  restore(entries: VoiceResult[]): void { this.entries = entries.slice(0, this.enabled ? this.limit : 1); }
 }

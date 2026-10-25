@@ -25,5 +25,5 @@ export function createLlm(env: Env = process.env): LlmProvider {
 export function createStt(env: Env = process.env): SttProvider {
   const model = env["WHISPER_MODEL"];
   if (!model) throw new Error("Set WHISPER_MODEL to a whisper.cpp model file to transcribe audio, or pass --text.");
-  return new WhisperCppStt(model, env["WHISPER_CLI"] ?? "whisper-cli");
+  return new WhisperCppStt(model, env["WHISPER_CLI"] ?? "whisper-cli", env["WHISPER_LANGUAGE"] ?? "auto");
 }

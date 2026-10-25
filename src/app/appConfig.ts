@@ -7,6 +7,8 @@ export const AppConfig = z.object({
   model: z.string().optional(),
   codexBinary: z.string().default("codex"),
   whisperModel: z.string().optional(),
+  /** Speech language as a Whisper code ("en", "es", "de"...), or "auto" to detect it. */
+  language: z.string().regex(/^(auto|[a-z]{2,3})$/i, 'Use a language code like "en" or "auto".').transform(value => value.toLowerCase()).default("auto"),
   whisperBackend: z.enum(["cli", "server"]).default("cli"),
   whisperServerBinary: z.string().default("whisper-server"),
   whisperBinary: z.string().default("whisper-cli"),
@@ -17,6 +19,12 @@ export const AppConfig = z.object({
   cleanupMode: z.enum(["verbatim", "clean", "polished"]).optional(),
   vocabulary: z.record(z.string(), z.string()).default({}),
   historyEnabled: z.boolean().default(false),
+  /** Keep results on disk (owner-only file) so they survive restarts. Needs historyEnabled. */
+  historyPersist: z.boolean().default(false),
+  /** Share the focused field's text and app type with the model so cleanup, edits and the agent match what you are writing. */
+  screenContext: z.boolean().default(false),
+  /** Give the agent built-in tools: Reminders, Calendar, Notes, Mail drafts, Messages, files, clipboard, web. */
+  builtinTools: z.boolean().default(true),
   historyLimit: z.number().int().min(1).max(100).default(20),
   /** Saved snippets: the phrase the user says maps to the text that is typed. */
   snippets: z.record(z.string(), z.string()).default({}),
@@ -48,5 +56,6 @@ export function configToEnv(config: AppConfig, base: Record<string, string | und
     VOICEOS_CODEX_BIN: config.codexBinary,
     WHISPER_MODEL: config.whisperModel ?? base["WHISPER_MODEL"],
     WHISPER_CLI: config.whisperBinary,
+    WHISPER_LANGUAGE: config.language,
   };
 }

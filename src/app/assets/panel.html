@@ -17,7 +17,7 @@
 <small>Follow-ups include the latest completed agent request and reply. Cancel stops subsequent steps; an action already sent to a tool may still finish.</small>
 </section>
 <div class="actions"><h2 style="flex:1">Results</h2><button id="clear">Clear results</button></div>
-<p class="muted">Reinsert and Retry let you choose a destination with a hotkey. Result history is kept in memory on this computer until you clear it or quit.</p>
+<p class="muted">Reinsert and Retry let you choose a destination with a hotkey. Result history is kept in memory on this computer until you clear it or quit, unless you choose to save it in settings.</p>
 <div id="results"></div>
 <section><details id="settings"><summary>Dictation & history settings</summary>
 <form id="preferences">
@@ -25,10 +25,17 @@
 <p class="muted">Verbatim keeps the transcript wording and punctuation. Clean up removes fillers and stutters. Polished also asks your model to refine it. Vocabulary replacements apply in every mode.</p>
 <label>Speech engine <select id="backend"><option value="cli">Whisper CLI</option><option value="server">Persistent Whisper server</option></select></label>
 <p class="muted">Persistent mode requires whisper-server on your PATH and a configured whisperModel. It keeps the model loaded between recordings. The first recording loads it.</p>
+<label>Speech language <input id="language" type="text" size="6" maxlength="3" value="auto" /></label>
+<p class="muted">A Whisper language code such as en, es, de, fr or ja, or “auto” to detect it. A fixed language is faster and more accurate. Multilingual models only.</p>
+<label><input id="screen" type="checkbox" /> Use the text in the focused field as context</label>
+<p class="muted">Shares the end of the text you are writing in (never password fields) plus the app type with your model for polished dictation, edits and the agent. No screenshot is taken. Off by default.</p>
+<label><input id="builtin" type="checkbox" /> Give the agent built-in tools</label>
+<p class="muted">Reminders, Calendar, Notes, Mail drafts, Messages, file search, clipboard and web search. Anything that changes something, or reads your clipboard, asks you first. Mail drafts are never sent automatically.</p>
 <label for="vocabulary">Vocabulary — one “heard phrase = preferred spelling” per line</label><textarea id="vocabulary" placeholder="open ai = OpenAI&#10;ben smith = Ben Smyth"></textarea>
 <label><input id="history" type="checkbox" /> Keep recent results for this session</label>
+<label><input id="persist" type="checkbox" /> Also save results to disk so they survive restarts</label>
 <label>Maximum results <input id="limit" type="number" min="1" max="100" value="20" /></label>
-<p class="muted">With history off, only the latest result is kept for recovery. Nothing is saved to disk.</p>
+<p class="muted">With history off, only the latest result is kept for recovery. Results are saved to disk only if you turn on saving, in a file only your user can read.</p>
 <button type="submit">Save settings</button><span id="settings-message" role="status"></span>
 </form></details></section>
 <script>
@@ -80,7 +87,8 @@ window.voiceos.onPanel(update => {
   if (!settingsLoaded) {
     settingsLoaded = true;
     $('mode').value=update.settings.cleanupMode; $('backend').value=update.settings.whisperBackend;
-    $('history').checked=update.settings.historyEnabled; $('limit').value=update.settings.historyLimit;
+    $('history').checked=update.settings.historyEnabled; $('persist').checked=update.settings.historyPersist;
+    $('language').value=update.settings.language; $('screen').checked=update.settings.screenContext; $('builtin').checked=update.settings.builtinTools; $('limit').value=update.settings.historyLimit;
     $('vocabulary').value=Object.entries(update.settings.vocabulary).map(([a,b])=>`${a} = ${b}`).join('\n');
   }
 });
@@ -94,7 +102,7 @@ $('preferences').onsubmit=async event=>{
     if(separator<1||!line.slice(separator+1).trim()){$('error').textContent='Use “heard phrase = preferred spelling” on each vocabulary line.';return;}
     Object.defineProperty(vocabulary,line.slice(0,separator).trim(),{value:line.slice(separator+1).trim(),enumerable:true});
   }
-  if(await action('settings',{cleanupMode:$('mode').value,whisperBackend:$('backend').value,vocabulary,historyEnabled:$('history').checked,historyLimit:Number($('limit').value)}))$('settings-message').textContent=' Saved';
+  if(await action('settings',{cleanupMode:$('mode').value,whisperBackend:$('backend').value,vocabulary,historyEnabled:$('history').checked,historyPersist:$('persist').checked,language:$('language').value.trim()||'auto',screenContext:$('screen').checked,builtinTools:$('builtin').checked,historyLimit:Number($('limit').value)}))$('settings-message').textContent=' Saved';
 };
 window.voiceos.panel('ready');
 </script>

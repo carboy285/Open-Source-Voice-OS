@@ -1,4 +1,5 @@
 import type { AppContext, ConfirmHandler, InjectorCommand, LlmProvider, SttProvider, TextInjector, ToolHost } from "../core/types.js";
+import { appKind } from "../core/context.js";
 import { runAgent } from "../modes/agent.js";
 import { resolveUtterance } from "../modes/commands.js";
 import { dictate } from "../modes/dictation.js";
@@ -32,6 +33,8 @@ export interface SessionDeps {
   /** Opaque identity of app, window, focused control and its contents. Fail closed if unavailable. */
   captureTarget?: () => Promise<string | undefined>;
   restoreTarget?: (target: string) => Promise<void>;
+  /** Text of the focused field, when the user has opted in. Read in the background; never delays recording. */
+  screenText?: () => Promise<string | undefined>;
   previewEdit?: (before: string, after: string, signal: AbortSignal) => Promise<boolean>;
   result?: (result: VoiceResult) => void;
   progress?: (message: string) => void;
@@ -53,6 +56,7 @@ export class VoiceSession {
   private target?: string;
   private context: AppContext = {};
   private selection = "";
+  private screen?: Promise<string | undefined>;
   private inserted = false;
   private undoTarget?: string;
   private queued?: string;
@@ -60,7 +64,7 @@ export class VoiceSession {
   private replay?: { text?: string; result?: VoiceResult };
 
   constructor(private readonly deps: SessionDeps) {}
-  updateSettings(settings: Pick<SessionDeps, "cleanupMode" | "vocabulary">): void {
+  updateSettings(settings: Pick<SessionDeps, "cleanupMode" | "vocabulary" | "snippets" | "voiceCommands">): void {
     Object.assign(this.deps, settings);
   }
   get busy(): boolean { return this.state !== "idle"; }
@@ -162,7 +166,9 @@ export class VoiceSession {
   }
 
   private async capture(mode: VoiceMode): Promise<void> {
-    this.context = { appName: await this.deps.frontmostApp?.() };
+    const appName = await this.deps.frontmostApp?.();
+    this.context = { appName, kind: appKind(appName) };
+    this.screen = this.deps.screenText?.().catch(() => undefined);
     this.target = await this.deps.captureTarget?.();
     this.selection = mode === "edit" ? await this.deps.injector.getSelection() : "";
   }
@@ -216,6 +222,9 @@ export class VoiceSession {
       replaceSelection: async (text) => { entry.text = text; },
     };
     try {
+      const screenText = await this.screen;
+      signal.throwIfAborted();
+      if (screenText) this.context.screenText = screenText;
       if (this.mode === "dictate") {
         const utterance = resolveUtterance(transcript, { snippets: this.deps.snippets, commands: this.deps.voiceCommands !== false });
         if (utterance.kind === "command") {
@@ -237,7 +246,7 @@ export class VoiceSession {
       } else if (this.mode === "edit") {
         this.invalidateUndo();
         this.stage("Rewriting…");
-        await editSelection(transcript, output, model);
+        await editSelection(transcript, output, model, this.context);
         signal.throwIfAborted();
         entry.status = "ready";
         if (this.deps.previewEdit) {

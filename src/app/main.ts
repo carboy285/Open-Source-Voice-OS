@@ -10,10 +10,12 @@ import type { ConfirmHandler, SttProvider, ToolHost } from "../core/types.js";
 import { loadMcpConfig, McpToolHost } from "../mcp/host.js";
 import { codexAuth } from "../providers/codex.js";
 import { WhisperServerStt } from "../providers/whisper.js";
+import { BuiltinToolHost } from "../tools/builtin.js";
+import { CompositeToolHost } from "../tools/composite.js";
 import { AppConfig, configToEnv, parseAppConfig } from "./appConfig.js";
-import { ResultHistory } from "./history.js";
+import { parseStoredHistory, ResultHistory } from "./history.js";
 import { HotkeyController } from "./hotkeys.js";
-import { captureMacTarget, frontmostApp, MacInjector, playSystemSound, realExec, resolveMacPath, restoreMacTarget } from "./macos.js";
+import { captureMacTarget, frontmostApp, MacInjector, playSystemSound, readFocusedText, realExec, resolveMacPath, restoreMacTarget } from "./macos.js";
 import { type Recorder, type UiState, VoiceSession } from "./session.js";
 import { toWhisperWav } from "./wav.js";
 
@@ -67,7 +69,8 @@ function publishPanel() {
     entries: history.list(), progress, progressLog, approvals,
     settings: { cleanupMode: config.cleanupMode ?? (config.polishDictation ? "polished" : "clean"),
       vocabulary: config.vocabulary, historyEnabled: config.historyEnabled,
-      historyLimit: config.historyLimit, whisperBackend: config.whisperBackend },
+      historyLimit: config.historyLimit, whisperBackend: config.whisperBackend, language: config.language,
+      historyPersist: config.historyPersist, screenContext: config.screenContext, builtinTools: config.builtinTools },
   });
 }
 function openPanel(focus = true) {
@@ -179,7 +182,7 @@ function createLocalStt(): SttProvider {
   return { transcribe: async (path, signal) => {
     try {
       const provider = config.whisperBackend === "server"
-        ? warmStt ??= new WhisperServerStt(config.whisperModel ?? process.env["WHISPER_MODEL"] ?? "", config.whisperServerBinary)
+        ? warmStt ??= new WhisperServerStt(config.whisperModel ?? process.env["WHISPER_MODEL"] ?? "", config.whisperServerBinary, config.language)
         : createStt(configToEnv(config, process.env));
       return await provider.transcribe(path, signal);
     } finally { await unlink(path).catch(() => undefined); }
@@ -205,8 +208,26 @@ function approval(title: string, detail: string, signal?: AbortSignal, before?: 
 }
 const confirm: ConfirmHandler = async ({ tool, input }) => approval(`Allow ${tool}?`, JSON.stringify(input, null, 2));
 async function openTools(): Promise<ToolHost> {
-  if (!config.mcpConfig) return { list: async () => [], call: async () => "" };
-  return McpToolHost.connect(await loadMcpConfig(config.mcpConfig));
+  const hosts: ToolHost[] = [];
+  if (config.builtinTools) hosts.push(new BuiltinToolHost(realExec));
+  if (config.mcpConfig) {
+    try { hosts.push(await McpToolHost.connect(await loadMcpConfig(config.mcpConfig))); }
+    catch (error) {
+      // The built-in tools still work; say what went wrong instead of failing the whole request.
+      progressLog = [...progressLog, `MCP tools unavailable: ${error instanceof Error ? error.message : String(error)}`].slice(-40);
+      publishPanel();
+      if (!hosts.length) throw error;
+    }
+  }
+  return hosts.length === 1 ? hosts[0]! : new CompositeToolHost(hosts);
+}
+const historyPath = () => join(app.getPath("userData"), "history.json");
+/** Results stay in memory unless the user opts in to an owner-only file. */
+async function persistHistory() {
+  if (config.historyEnabled && config.historyPersist) {
+    await mkdir(dirname(historyPath()), { recursive: true });
+    await writeFile(historyPath(), JSON.stringify(history.list()), { mode: 0o600 });
+  } else await unlink(historyPath()).catch(() => undefined);
 }
 function cancel() {
   if (overlayExpanded) showOverlay("idle", ""); // Escape also closes an open response
@@ -255,7 +276,7 @@ function wirePanel() {
     try {
       if (action === "ready") publishPanel();
       else if (action === "cancel") cancel();
-      else if (action === "clear") { history.clear(); progressLog = []; publishPanel(); }
+      else if (action === "clear") { history.clear(); progressLog = []; await persistHistory(); publishPanel(); }
       else if (action === "approve" && value && typeof value === "object") {
         const input = value as { id?: unknown; allow?: unknown };
         if (typeof input.id === "string" && typeof input.allow === "boolean") pendingApprovals.get(input.id)?.(input.allow);
@@ -269,12 +290,14 @@ function wirePanel() {
         if (voice.busy) throw new Error("Finish or cancel the current request before changing settings.");
         const input = value as Record<string, unknown>;
         const next = AppConfig.parse({ ...config, cleanupMode: input.cleanupMode, vocabulary: input.vocabulary,
-          historyEnabled: input.historyEnabled, historyLimit: input.historyLimit, whisperBackend: input.whisperBackend });
+          historyEnabled: input.historyEnabled, historyLimit: input.historyLimit, whisperBackend: input.whisperBackend,
+          language: input.language, historyPersist: input.historyPersist, screenContext: input.screenContext, builtinTools: input.builtinTools });
         await mkdir(dirname(configPath()), { recursive: true });
         await writeFile(configPath(), JSON.stringify(next, null, 2), { mode: 0o600 });
         config = next;
         warmStt?.close(); warmStt = undefined;
         history.configure(config.historyEnabled, config.historyLimit);
+        await persistHistory();
         voice.updateSettings({ cleanupMode: config.cleanupMode, vocabulary: config.vocabulary });
         publishPanel();
       } else if (["copy", "retry", "reinsert"].includes(String(action)) && typeof value === "string") {
@@ -303,6 +326,7 @@ app.whenReady().then(async () => {
     return parseAppConfig(undefined);
   });
   history.configure(config.historyEnabled, config.historyLimit);
+  if (config.historyEnabled && config.historyPersist) history.restore(parseStoredHistory(await readFile(historyPath(), "utf8").catch(() => "[]")));
   session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => callback(permission === "media" && wc === recorderWindow?.webContents));
   recorderWindow = secureWindow({ show: false, width: 1, height: 1 });
   await recorderWindow.loadFile(asset("recorder.html"));
@@ -322,8 +346,9 @@ app.whenReady().then(async () => {
     llm: { complete: request => createLlm(configToEnv(config, process.env)).complete(request) },
     tools: openTools, confirm, status: onStatus,
     frontmostApp: () => frontmostApp(realExec), captureTarget: () => captureMacTarget(realExec), restoreTarget: target => restoreMacTarget(target, realExec),
+    screenText: async () => config.screenContext ? (await readFocusedText(realExec))?.text : undefined,
     previewEdit: (before, after, signal) => approval("Review voice edit", after, signal, before),
-    result: entry => { history.add(entry); publishPanel(); if (entry.status === "ready" || (entry.status === "failed" && entry.mode !== "agent")) openPanel(false); },
+    result: entry => { history.add(entry); void persistHistory().catch(() => undefined); publishPanel(); if (entry.status === "ready" || (entry.status === "failed" && entry.mode !== "agent")) openPanel(false); },
     progress: text => { progressLog = [...progressLog, text].slice(-40); publishPanel(); },
     polishDictation: config.polishDictation, cleanupMode: config.cleanupMode, vocabulary: config.vocabulary,
     snippets: config.snippets, voiceCommands: config.voiceCommands,

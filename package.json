@@ -67,7 +67,7 @@
       "extendInfo": {
         "LSUIElement": true,
         "NSMicrophoneUsageDescription": "Voice OS listens while you hold a hotkey so it can turn your speech into text and actions.",
-        "NSAppleEventsUsageDescription": "Voice OS types the text you dictate into the app you are using."
+        "NSAppleEventsUsageDescription": "Voice OS types the text you dictate into the app you are using, and lets your agent work with apps like Reminders, Calendar, Notes, Mail and Messages when you approve it."
       }
     }
   }

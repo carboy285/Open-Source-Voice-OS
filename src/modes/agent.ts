@@ -7,6 +7,8 @@ export interface AgentOptions {
   progress?: (message: string) => void;
   maxSteps?: number;
   context?: AppContext;
+  /** Clock for the date and time given to the model. Replaceable in tests. */
+  now?: () => Date;
 }
 
 export interface AgentOutcome {
@@ -30,7 +32,8 @@ export async function runAgent(
   const maxSteps = options.maxSteps ?? 8;
   const ctx = options.context;
   const contextLines = [
-    ctx?.appName ? `Frontmost app: ${ctx.appName}` : "",
+    `Current date and time: ${(options.now?.() ?? new Date()).toString()}`,
+    ctx?.appName ? `Frontmost app: ${ctx.appName}${ctx.kind ? ` (${ctx.kind})` : ""}` : "",
     ctx?.screenText ? `Text on screen:\n${ctx.screenText}` : "",
   ].filter(Boolean);
   const messages: Message[] = [

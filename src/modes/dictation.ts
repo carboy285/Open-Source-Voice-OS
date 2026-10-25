@@ -61,7 +61,7 @@ export async function dictate(
     const where = context.appName ? `The text goes into ${context.appName}${context.kind ? ` (${context.kind})` : ""}.` : "";
     const response = await options.polish.complete({
       system: POLISH_SYSTEM,
-      messages: [{ role: "user", text: `${where}\n\nDictation:\n${text}`.trim() }],
+      messages: [{ role: "user", text: `${where}${context.screenText ? `\n\nText already in the field, for context only. Do not repeat it:\n${context.screenText}` : ""}\n\nDictation:\n${text}`.trim() }],
       maxTokens: 1024,
     });
     text = response.text.trim() || text;

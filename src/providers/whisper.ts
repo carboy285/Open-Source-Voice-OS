@@ -28,7 +28,7 @@ export class WhisperServerStt implements SttProvider {
   private child?: import("node:child_process").ChildProcess;
   private starting?: Promise<string>;
   private lifetime = new AbortController();
-  constructor(private modelPath: string, private binary = "whisper-server") {}
+  constructor(private modelPath: string, private binary = "whisper-server", private language = "auto") {}
 
   close(): void {
     this.lifetime.abort();
@@ -50,7 +50,7 @@ export class WhisperServerStt implements SttProvider {
       const form = new FormData();
       form.set("file", new Blob([new Uint8Array(audio)], { type: "audio/wav" }), "recording.wav");
       form.set("response_format", "json");
-      form.set("language", "auto");
+      form.set("language", this.language);
       const response = await fetch(`${url}/inference`, { method: "POST", body: form, signal: combined });
       if (!response.ok) throw new Error(`Whisper server returned ${response.status}.`);
       const result = await response.json() as { text?: unknown };

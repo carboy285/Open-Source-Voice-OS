@@ -157,6 +157,32 @@ permission. "Scratch that" is enabled only after a Voice OS insertion in the sam
 by intervening keyboard input, clicks, scrolling, or another voice command. It still uses the target app’s ⌘Z
 behavior, so app-driven changes can affect its undo stack.
 
+## Built-in agent tools
+
+The agent works out of the box, without any MCP setup. These tools are built in (turn them off with
+`"builtinTools": false`):
+
+| Tool | What it does | Asks first? |
+|------|--------------|-------------|
+| `get_datetime`, `search_files` | Current local time; find files by name with Spotlight | No |
+| `create_reminder`, `create_event`, `create_note` | Reminders, Calendar and Notes | Yes |
+| `draft_email` | Opens a Mail draft. It is never sent for you. | Yes |
+| `send_message` | Sends an iMessage | Yes |
+| `open_app`, `open_url`, `web_search` | Open an app, an http(s) link, or a browser search | Yes |
+| `clipboard_read`, `clipboard_write` | Read or replace the clipboard | Yes |
+
+Anything that changes something, or reveals private data such as the clipboard, shows an approval card first. Your
+words reach AppleScript as arguments, never as script text. MCP tools are added alongside these.
+
+## Language, context and history
+
+- **Language.** `"language": "es"` (any Whisper code) pins the speech language; the default `"auto"` detects it.
+- **Context from the focused field.** Off by default. With `"screenContext": true`, the app type and the end of the
+  text you are writing in (never a password field, no screenshot) go to your model for polished dictation, edits and
+  the agent, so replies match what you are writing. The agent also always gets the current date and time.
+- **History on disk.** Results stay in memory by default. With `"historyEnabled": true` and `"historyPersist": true` they
+  are saved to a file only your user can read, so they survive restarts. Clear results deletes it.
+
 From the CLI, snippets are passed per call and commands are off, since stdout has nothing to undo:
 
 ```bash

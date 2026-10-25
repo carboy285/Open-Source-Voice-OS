@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { MAX_SCREEN_TEXT } from "../core/context.js";
 import type { InjectorCommand, TextInjector } from "../core/types.js";
 
 /** Runs a command and returns stdout. Replaceable so the macOS logic is testable off a Mac. */
@@ -92,6 +93,36 @@ export class MacInjector implements TextInjector {
   async command(name: InjectorCommand): Promise<void> {
     await osascript(this.exec, name === "undo" ? KEYSTROKE_Z : KEYSTROKE_A);
   }
+}
+
+export interface FocusedText { app: string; text: string }
+
+/**
+ * Reads the text of the focused field in the frontmost app through Accessibility, without a screenshot.
+ * Password fields are never read. Only the end of long text is kept, since that is nearest the cursor.
+ */
+export async function readFocusedText(exec: Exec = realExec, limit = MAX_SCREEN_TEXT): Promise<FocusedText | undefined> {
+  try {
+    const out = await osascript(exec, `tell application "System Events"
+      set p to first application process whose frontmost is true
+      set appName to name of p
+      set field to value of attribute "AXFocusedUIElement" of p
+      set kind to ""
+      try
+        set kind to (value of attribute "AXSubrole" of field) as text
+      end try
+      if kind is "AXSecureTextField" then return appName & linefeed & "secure" & linefeed
+      set contents to ""
+      try
+        set contents to (value of attribute "AXValue" of field) as text
+      end try
+      return appName & linefeed & "ok" & linefeed & contents
+    end tell`);
+    const [app = "", status = "", ...rest] = out.split("\n");
+    if (!app || status !== "ok") return undefined;
+    const text = rest.join("\n").trim();
+    return text ? { app, text: text.length > limit ? text.slice(-limit) : text } : undefined;
+  } catch { return undefined; }
 }
 
 export type SystemSound = "done" | "error";
