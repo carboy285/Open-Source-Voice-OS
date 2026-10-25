@@ -30,6 +30,10 @@ export interface TaskRunnerOptions {
   timeZone?: () => string;
   /** What the agent remembers between requests. Without it every request starts from nothing. */
   conversation?: Conversation;
+  /** SOUL.md and relevant MEMORY.md facts, appended to the agent's system prompt. */
+  memory?: (request: string) => string;
+  /** Called once a task finishes successfully, for learning from the exchange. */
+  onTurn?: (request: string, reply: string) => void;
   /** BCP 47 locale for dates on approval cards. */
   locale?: () => string;
   limits?: () => { maxSteps?: number; maxWallMs?: number; approvalTimeoutMs?: number };
@@ -90,6 +94,29 @@ export class TaskRunner {
     return { taskId: id, done: entry.done };
   }
 
+  /** Answers without a model, for memory commands. Returns the task id. */
+  reply(request: string, reply: string, context?: AppContext): string {
+    const id = randomUUID();
+    const save = this.options.saveTranscripts?.() ?? false;
+    const now = this.clock.now();
+    const record: TaskRecord = {
+      id,
+      status: "done",
+      transcript: save ? request : null,
+      reply,
+      startedAt: now,
+      finishedAt: now,
+      steps: [],
+    };
+    this.recent.set(id, { transcript: request, context });
+    if (this.recent.size > 50) this.recent.delete(this.recent.keys().next().value!);
+    this.store.save(record);
+    this.options.conversation?.begin(request);
+    this.options.conversation?.record({ request, reply, status: "done", actions: [] });
+    this.options.onUpdate?.({ taskId: id, status: "done", steps: [], long: false, reply });
+    return id;
+  }
+
   /** Stops before the next tool call. A tool call already running finishes. */
   cancel(taskId: string): boolean {
     const entry = this.live.get(taskId);
@@ -144,6 +171,7 @@ export class TaskRunner {
     try {
       outcome = await runAgent(entry.transcript, llm, this.options.tools, gate, {
         context: entry.context,
+        memory: this.options.memory?.(entry.transcript),
         clock: this.clock,
         timeZone: this.options.timeZone?.(),
         history: this.options.conversation?.messages(),
@@ -175,6 +203,7 @@ export class TaskRunner {
     }
     const status: TaskStatus =
       outcome.status === "done" ? "done" : outcome.status === "cancelled" ? "cancelled" : "failed";
+    if (status === "done" && outcome.reply) this.options.onTurn?.(entry.transcript, outcome.reply);
     return this.finish(entry, status, outcome.reply);
   }
 

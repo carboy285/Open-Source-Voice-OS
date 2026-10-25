@@ -67,6 +67,8 @@ export interface AgentOptions {
   history?: Message[];
   /** Pictures for the first message of this request, for a model that can see them. */
   images?: ImageInput[];
+  /** SOUL.md and relevant memory facts, appended to the system prompt as data. */
+  memory?: string;
   maxSteps?: number;
   maxWallMs?: number;
   context?: AppContext;
@@ -189,7 +191,7 @@ export async function runAgent(
     let response;
     try {
       response = await llm.complete({
-        system: AGENT_SYSTEM,
+        system: options.memory ? `${AGENT_SYSTEM}\n\n${options.memory}` : AGENT_SYSTEM,
         messages,
         tools: specs,
         maxTokens: 1024,

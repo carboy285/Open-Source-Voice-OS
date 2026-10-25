@@ -13,9 +13,23 @@ struct PersonalizationSettings: View {
     @State private var error: String?
     @State private var editingPhrase: String?
     @State private var editingProfile: String?
+    @State private var soulDraft = ""
+    @State private var memoryFacts: [JSONObject] = []
+    @State private var memoryPath = ""
+    @State private var soulPath = ""
+    @State private var memoryLoaded = false
+    @State private var fact = ""
+    @State private var factKind = "other"
+    @State private var confirmClear = false
 
     private var shortcuts: [JSONObject] { model.settings["voice.shortcuts"] as? [JSONObject] ?? [] }
     private var profiles: [JSONObject] { model.settings["writing.profiles"] as? [JSONObject] ?? [] }
+    private var memoryEnabled: Binding<Bool> {
+        Binding(get: { model.settings["memory.enabled"] as? Bool ?? true }, set: { model.setSetting("memory.enabled", $0) })
+    }
+    private var memoryAuto: Binding<Bool> {
+        Binding(get: { model.settings["memory.autoRemember"] as? Bool ?? true }, set: { model.setSetting("memory.autoRemember", $0) })
+    }
     private func setting(_ key: String, fallback: String = "") -> Binding<String> {
         Binding(get: { model.settings[key] as? String ?? fallback }, set: { model.setSetting(key, $0) })
     }
@@ -97,9 +111,58 @@ struct PersonalizationSettings: View {
                 Text(L("translation.help")).font(.caption).foregroundStyle(.secondary)
             }
             Section(L("voice.corrections")) { Text(L("voice.corrections.help")).font(.callout).foregroundStyle(.secondary) }
+            Section(L("memory.title")) {
+                Text(L("memory.help")).font(.caption).foregroundStyle(.secondary)
+                Toggle(L("memory.enabled"), isOn: memoryEnabled)
+                Toggle(L("memory.auto"), isOn: memoryAuto).disabled(!(model.settings["memory.enabled"] as? Bool ?? true))
+                Text(L("memory.auto.help")).font(.caption).foregroundStyle(.secondary)
+                if memoryLoaded {
+                    TextField(L("memory.soul"), text: $soulDraft, axis: .vertical).lineLimit(3...6)
+                    HStack {
+                        Button(L("approval.save")) { saveSoul() }
+                        Button(L("memory.show_file")) { revealMemory() }
+                        Spacer()
+                        Button(L("memory.clear")) { confirmClear = true }.disabled(memoryFacts.isEmpty)
+                    }
+                    Text(L("memory.facts_count", ["count": String(memoryFacts.count)]))
+                        .font(.caption).foregroundStyle(.secondary)
+                    ForEach(memoryFacts.indices, id: \.self) { index in
+                        let item = memoryFacts[index]
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item["text"] as? String ?? "")
+                                Text(L("memory.kind.\(item["kind"] as? String ?? "other")"))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button(L("voice.remove")) { removeFact(item["id"] as? String ?? "") }
+                        }
+                    }
+                    HStack {
+                        TextField(L("memory.add"), text: $fact)
+                        Picker(L("memory.kind"), selection: $factKind) {
+                            Text(L("memory.kind.person")).tag("person")
+                            Text(L("memory.kind.project")).tag("project")
+                            Text(L("memory.kind.preference")).tag("preference")
+                            Text(L("memory.kind.decision")).tag("decision")
+                            Text(L("memory.kind.other")).tag("other")
+                        }
+                        .frame(width: 130)
+                        Button(L("memory.add.button")) { addFact() }
+                            .disabled(fact.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
             if let error { Text(error).foregroundStyle(.red) }
         }
         .formStyle(.grouped)
+        .onAppear { loadMemory() }
+        .alert(L("memory.clear"), isPresented: $confirmClear) {
+            Button(L("memory.clear"), role: .destructive) { clearMemory() }
+            Button(L("approval.cancel"), role: .cancel) {}
+        } message: {
+            Text(L("memory.clear.confirm"))
+        }
     }
 
     private func profileName(_ item: JSONObject) -> String {
@@ -129,5 +192,64 @@ struct PersonalizationSettings: View {
         var items = profiles.filter { $0["id"] as? String != id }
         items.append(["id": id, "name": name, "instructions": instructions, "appIds": apps.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }])
         save("writing.profiles", items) { name = ""; instructions = ""; apps = ""; editingProfile = nil }
+    }
+
+    // MARK: Memory
+
+    /// Memory lives in two files the core owns. Settings edits them through RPC so the files never cross the boundary.
+    private func loadMemory() {
+        model.core.request("memory.status") { result in
+            if case let .success(value) = result { applyMemory(value) }
+        }
+    }
+
+    private func applyMemory(_ value: Any) {
+        guard let object = value as? JSONObject else { return }
+        soulDraft = object["soul"] as? String ?? soulDraft
+        memoryFacts = object["facts"] as? [JSONObject] ?? []
+        memoryPath = object["path"] as? String ?? memoryPath
+        soulPath = object["soulPath"] as? String ?? soulPath
+        memoryLoaded = true
+    }
+
+    private func saveSoul() {
+        model.core.request("memory.soul.set", ["text": soulDraft]) { result in
+            switch result {
+            case let .success(value): applyMemory(value)
+            case let .failure(failure): error = failure.localizedDescription
+            }
+        }
+    }
+
+    private func addFact() {
+        let text = fact.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        model.core.request("memory.add", ["text": text, "kind": factKind]) { result in
+            switch result {
+            case let .success(value):
+                applyMemory(value)
+                fact = ""
+            case let .failure(failure): error = failure.localizedDescription
+            }
+        }
+    }
+
+    private func removeFact(_ id: String) {
+        guard !id.isEmpty else { return }
+        model.core.request("memory.remove", ["id": id]) { result in
+            if case let .success(value) = result { applyMemory(value) }
+        }
+    }
+
+    private func clearMemory() {
+        model.core.request("memory.clear") { result in
+            if case let .success(value) = result { applyMemory(value) }
+        }
+    }
+
+    private func revealMemory() {
+        let files = [soulPath, memoryPath].filter { !$0.isEmpty }.map { URL(fileURLWithPath: $0) }
+        guard !files.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(files)
     }
 }

@@ -1,10 +1,12 @@
-# Local Mac update — 0.2.8.6.3
+# Local Mac update — 0.2.8.6.4
 
 This checkout starts from the installed Murmur version 0.2.8.6.2 (local commit b1d0063). It contains local changes only. No commits, tags, pushes, GitHub release, or installer publication were made.
 
 Changes:
 
-- Captures the app, focused window, field contents and selection at the start of dictation/editing. Guarded insertions stop if they change; output remains in Tasks & results.
+- Captures the app, focused window, field contents and selection at the start of dictation/editing. Guarded insertions stop only when the destination demonstrably changed; apps that expose no readable value or selection (web and Electron fields) no longer report a false "destination changed". Output also remains in Tasks & results.
+- Adds persistent memory: `SOUL.md` (how Murmur speaks) and `MEMORY.md` (facts it keeps) in the data folder, both local and editable in Settings → Personalize. Say "remember that…", "forget…" or "what do you remember?"; after a reply an optional extraction pass keeps names, preferences, projects and decisions. Passwords, keys and one-off requests are never stored. Facts go to the configured model only as part of a request.
+- Fixes double-tap-to-lock: the first tap keeps its recording alive through the double-tap gap, so the second tap continues the same dictation instead of cancelling and restarting it. The microphone watchdog no longer treats a locked recording as a lost key release, and the press that ends a lock always transcribes, even when it is short.
 - Previews voice edits with Replace selection / Keep original, and rechecks the original target after approval.
 - Adds Verbatim, Clean up and Polished modes in Settings → Dictation. The existing dictionary applies in all three modes.
 - Cancels transcription/model processing and suppresses late insertions after Escape. Escape or Cancel also cancels the most recent active agent task. An action already dispatched to an external tool may still finish.
@@ -26,6 +28,6 @@ The SDK override works around missing SwiftUI compiler plugins in this Mac's new
 Original app backup: /Users/ben/src/Murmur-0.2.8.6.2-before-local-update.app.bak
 Database backup: build/backups/murmur-before-local-update.db (private permissions)
 
-Validation: TypeScript typecheck; 327 passing core tests (2 existing tests skipped); production Swift build; bundle signature validation; bundled-core smoke check. Native XCTest execution is unavailable with the installed command-line tools because XCTest is missing. Installed-app launch and UI checks are performed separately.
+Validation: TypeScript typecheck; 356 passing core tests (2 existing tests skipped); production Swift build; bundle signature validation; bundled-core smoke check. Native XCTest execution is unavailable with the installed command-line tools because XCTest is missing. Installed-app launch and UI checks are performed separately.
 
 Settings, Keychain entries, downloaded speech models and the database remain outside the app bundle. Ad-hoc builds may require renewing macOS Accessibility/Input Monitoring permission after replacement.

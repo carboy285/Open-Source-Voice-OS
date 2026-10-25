@@ -8,6 +8,7 @@
 | Anonymous, opt-in diagnostics | B-P4 | Default off. When on: an app version, OS version, a random install id rotated every 30 days, and counters (dictations, agent tasks, error codes, latency buckets). **Never** text, audio, app names, file names or connector data. The exact payload is shown in Settings before opting in. The endpoint is configurable and empty by default (no Murmur-operated server exists yet) (D) |
 
 Other rules (D):
+- Memory is two local Markdown files, `SOUL.md` and `MEMORY.md` (`memory.md`). Murmur reads them on this computer and sends only the selected facts to the user's configured model as part of a request. They are never uploaded anywhere else, are visible and editable in Settings › Personalize, and "Delete all data" removes them.
 - Screen context is captured only on hotkey press, used for that request, and not stored.
 - Connector tokens live in the OS keychain.
 - No network call happens without a configured provider; offline use with local STT + local LLM works fully.

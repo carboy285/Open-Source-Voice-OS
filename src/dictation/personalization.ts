@@ -100,6 +100,9 @@ export function validatePersonalization(key: string, value: unknown): unknown {
   if (key === "dictation.cleanupMode") return z.enum(["verbatim", "clean", "polished"]).parse(value);
   if (key === "recovery.sessionHistory" || key === "stt.keepLoaded") return z.boolean().parse(value);
   if (key === "recovery.limit") return z.number().int().min(1).max(100).parse(value);
+  if (key === "memory.enabled" || key === "memory.autoRemember") return z.boolean().parse(value);
+  if (key === "memory.maxEntries") return z.number().int().min(10).max(2000).parse(value);
+  if (key === "memory.injectFacts") return z.number().int().min(1).max(100).parse(value);
   if (key === "dictation.livePreview") return z.boolean().parse(value);
   return value;
 }

@@ -8,6 +8,7 @@ Murmur now includes six additions on macOS and Windows:
 - **Writing profiles:** Settings › Personalize. Choose Work, Friends, Concise, or create your own profile. App assignments take precedence over the default profile. Profiles use the configured AI provider, preserve meaning and language, and retain existing polish limits and fallback behavior. Code fields bypass polish. Removing the selected profile falls back to normal app-aware writing.
 - **Translation:** Settings › Personalize › Dictation translation. Choose Translate dictation and a target language. This is an explicit mode for dictated text and text shortcuts. It requires the configured AI provider and reports a failure rather than inserting untranslated text. Ordinary dictation retains its existing language-preservation rules. AI task requests are not translated.
 - **Setup test:** The new introduction leads through access, a local speech model, and a practice area. The microphone test uses the actual speech and cleanup pipeline without inserting text, starting tasks or storing transcripts. Recording stops automatically after 20 seconds. A separate practice field tests the real hotkey and insertion route. Practice is optional once the required permissions and model are ready. Screen capture and an AI provider are introduced as optional extras.
+- **Memory:** Settings › Personalize › Memory shows `SOUL.md` (how Murmur speaks) and the facts in `MEMORY.md`, with an add field, per-fact removal and Clear memory. Both files sit in the data folder with mode `0600` and are read fresh on every request. In Ask mode, “remember that…”, “forget…” and “what do you remember?” are answered without a model; after a reply an optional extraction pass keeps names, preferences, projects and decisions. Secrets are filtered out. “Delete all data” removes the files. See `spec/memory.md`.
 
 ## Protocol additions
 
@@ -15,6 +16,7 @@ Murmur now includes six additions on macOS and Windows:
 - `setup.practice { audio, sampleRate }` → `{ text }`: safe local speech practice. Also accepts `transcript` for testing.
 - Shell method `text.replaceRecent { expected, replacement }` → `{ ok }`: conditional replacement of the last inserted span, with native field and caret checks.
 - Shell method `text.selectAll {}` → `{ ok }`: selects the focused field with ⌘A / Ctrl+A. The core asks for it only when the shell advertises the method.
+- `memory.status {}` → `{ enabled, autoRemember, soul, memory, facts, path, soulPath }`; `memory.add { text, kind }`, `memory.remove { id }`, `memory.clear {}`, `memory.replace { text }` and `memory.soul.set { text }` all return the new status. `memory.search { query, limit }` → `{ facts }`. The files themselves never cross the RPC boundary.
 
 Personalization is persisted through `settings.get` / `settings.set`. The new keys are `voice.shortcuts`, `writing.profiles`, `writing.activeProfile`, `dictation.livePreview`, `dictation.outputMode` and `dictation.targetLanguage`. Collections and language/mode values are validated before saving.
 

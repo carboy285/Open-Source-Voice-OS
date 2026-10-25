@@ -16,6 +16,11 @@ export const DEFAULT_SETTINGS = {
   "dictation.cleanupMode": "polished" as string,
   "recovery.sessionHistory": false,
   "recovery.limit": 20,
+  /** SOUL.md and MEMORY.md. Learning is local and stored in the user's data directory. */
+  "memory.enabled": true,
+  "memory.autoRemember": true,
+  "memory.maxEntries": 300,
+  "memory.injectFacts": 20,
   "stt.keepLoaded": false,
   "stt.serverBinary": "whisper-server",
   "dictation.toggleMode": false,

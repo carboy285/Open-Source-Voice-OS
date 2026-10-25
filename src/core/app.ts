@@ -1,4 +1,6 @@
-import { rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { AgentHub } from "../agents/hub.js";
 import { ClaudeAdapter } from "../agents/claude.js";
 import { CodexAdapter } from "../agents/codex.js";
@@ -24,6 +26,8 @@ import { McpManager, type ConnectionFactory } from "../mcp/manager.js";
 import { Conversation, type ChatSnapshot } from "../modes/conversation.js";
 import { editSelection } from "../modes/edit.js";
 import { processDictation } from "../modes/dictation.js";
+import { extractFacts, parseMemoryCommand, type MemoryCommand } from "../memory/extract.js";
+import { MemoryStore, type MemoryFact } from "../memory/store.js";
 import { AnthropicLlm } from "../providers/anthropic.js";
 import { ChatGptSession } from "../providers/chatgpt-auth.js";
 import { ChatGptCodexLlm } from "../providers/chatgpt-codex.js";
@@ -147,6 +151,8 @@ export interface CoreOptions {
   mcpConfigPath?: string;
   /** Downloaded speech models. Defaults to `models/` in the data directory. */
   modelsDir?: string;
+  /** Where SOUL.md and MEMORY.md live. Defaults to the database's directory. */
+  memoryDir?: string;
   env?: NodeJS.ProcessEnv;
   clock?: Clock;
   /** Overrides for tests. */
@@ -175,12 +181,17 @@ export class MurmurCore {
   runner!: TaskRunner;
   /** What the agent remembers between requests. */
   conversation!: Conversation;
+  /** SOUL.md and MEMORY.md: the assistant's voice and the facts it keeps. */
+  memory!: MemoryStore;
   scheduler!: ReminderScheduler;
   readonly secrets: IndexedSecretStore;
 
   private readonly clock: Clock;
   private readonly dbPath: string;
   private readonly mcpPath: string;
+  private readonly memoryDir: string;
+  private readonly temporaryMemoryDir: boolean;
+  private learning?: Promise<void>;
   private persistentStt?: { key: string; provider: WhisperServerStt };
   private dictationController = new AbortController();
   private pendingContext?: Promise<CapturedContext>;
@@ -195,6 +206,10 @@ export class MurmurCore {
     this.clock = options.clock ?? systemClock;
     this.dbPath = options.databasePath ?? databasePath(options.env);
     this.mcpPath = options.mcpConfigPath ?? mcpConfigPath(options.env);
+    this.temporaryMemoryDir = !options.memoryDir && this.dbPath === ":memory:";
+    this.memoryDir =
+      options.memoryDir ??
+      (this.temporaryMemoryDir ? mkdtempSync(join(tmpdir(), "murmur-memory-")) : dirname(this.dbPath));
     this.models = new ModelManager(options.modelsDir ?? modelsDir(options.env), options.fetch);
     this.db = new Database(this.dbPath);
     this.secrets = new IndexedSecretStore(options.bridge.secrets, {
@@ -267,9 +282,19 @@ export class MurmurCore {
     });
     this.conversation = new Conversation(this.clock);
     this.conversation.onChange = () => this.emit({ type: "conversation.update", ...this.conversation.snapshot() });
+    this.memory = new MemoryStore({
+      dir: this.memoryDir,
+      clock: this.clock,
+      maxEntries: () => this.settings.get("memory.maxEntries"),
+      injectFacts: () => this.settings.get("memory.injectFacts"),
+    });
     this.runner = new TaskRunner({
       conversation: this.conversation,
       llm: () => this.llm(),
+      memory: (request) => (this.settings.get("memory.enabled") ? this.memory.prompt(request) : ""),
+      onTurn: (request, reply) => {
+        void this.learnNow(request, reply).catch(() => {});
+      },
       // Proxy so a reloaded MCP manager is picked up without rebuilding the runner.
       tools: new CompositeToolHost([
         this.registry,
@@ -332,6 +357,7 @@ export class MurmurCore {
   }
 
   async start(): Promise<void> {
+    this.memory.ensure();
     this.offerNewConnectors();
     this.prune();
     this.scheduler.start();
@@ -958,6 +984,12 @@ export class MurmurCore {
       input.context ??
       ((await (this.pendingContext ?? this.options.bridge.captureContext().catch(() => ({})))) as CapturedContext);
     this.pendingContext = undefined;
+    // Memory commands are answered from MEMORY.md, not by the model: offline, instant, and impossible to invent.
+    const command = parseMemoryCommand(transcript);
+    if (command) {
+      const reply = this.settings.get("memory.enabled") ? this.answerMemoryCommand(command) : this.t("memory.disabled");
+      return { taskId: this.runner.reply(transcript, reply, context) };
+    }
     // Only a model that can see gets the picture. The others still get the text read from it (circledText).
     const images = input.images?.length && (await this.llm())?.supportsImages ? input.images.slice(0, 2) : undefined;
     const { taskId } = this.runner.start(
@@ -970,6 +1002,63 @@ export class MurmurCore {
       images,
     );
     return { taskId };
+  }
+
+  // Memory
+
+  /**
+   * Learns from one finished turn. Extraction runs in the background and a failure never affects the reply.
+   * Writes are serialized so two quick requests cannot interleave edits to MEMORY.md.
+   */
+  async learnNow(request: string, reply: string): Promise<MemoryFact[]> {
+    if (!this.settings.get("memory.enabled") || !this.settings.get("memory.autoRemember")) return [];
+    const previous = this.learning ?? Promise.resolve();
+    const job = previous.then(async () => {
+      const llm = await this.llm();
+      if (!llm) return [];
+      const facts = await extractFacts(llm, request, reply);
+      return this.memory.remember(facts);
+    });
+    this.learning = job.then(
+      () => undefined,
+      () => undefined,
+    );
+    return job;
+  }
+
+  /** What Settings shows: both files, the parsed facts and whether learning is on. */
+  memoryStatus(): {
+    enabled: boolean;
+    autoRemember: boolean;
+    soul: string;
+    memory: string;
+    facts: MemoryFact[];
+    path: string;
+    soulPath: string;
+  } {
+    return {
+      enabled: this.settings.get("memory.enabled"),
+      autoRemember: this.settings.get("memory.autoRemember"),
+      soul: this.memory.soul(),
+      memory: this.memory.text(),
+      facts: this.memory.facts(),
+      path: this.memory.memoryPath,
+      soulPath: this.memory.soulPath,
+    };
+  }
+
+  private answerMemoryCommand(command: MemoryCommand): string {
+    if (command.kind === "remember") {
+      const added = this.memory.remember([{ text: command.text }]);
+      return added.length ? this.t("memory.saved") : this.t("memory.already_known");
+    }
+    if (command.kind === "forget") {
+      const removed = this.memory.forget(command.query);
+      return removed ? this.t("memory.forgotten", { count: removed }) : this.t("memory.not_found");
+    }
+    const list = this.memory.recall(command.query);
+    if (list) return `${this.t(command.query ? "memory.about" : "memory.recall")}\n\n${list}`;
+    return command.query ? this.t("memory.nothing_about", { query: command.query }) : this.t("memory.empty");
   }
 
   // Connectors
@@ -1026,6 +1115,9 @@ export class MurmurCore {
     this.db = new Database(this.dbPath);
     this.wire();
     await this.start();
+    // start() creates SOUL.md and MEMORY.md on a normal launch. After an explicit wipe they stay gone until the
+    // next launch, so "Delete all data" really removes them instead of leaving empty files behind.
+    this.memory.destroy();
   }
 
   async close(): Promise<void> {
@@ -1035,6 +1127,7 @@ export class MurmurCore {
     this.scheduler.stop();
     await this.mcp.close();
     this.db.close();
+    if (this.temporaryMemoryDir) rmSync(this.memoryDir, { recursive: true, force: true });
   }
 }
 

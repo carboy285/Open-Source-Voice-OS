@@ -47,6 +47,7 @@ No binary, installer, decompiled code, network capture or asset of any other pro
 | `tone-context.md` | App categories and style rules |
 | `languages.md` | Language detection and output |
 | `agent.md` | Agent loop, context, long tasks, history |
+| `memory.md` | SOUL.md, MEMORY.md, learning and recall |
 | `approval-gate.md` | Side-effect classification and the preview |
 | `connectors.md` | Connector interface, catalog, OAuth |
 | `mcp.md` | MCP client behavior and CLI |

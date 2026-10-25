@@ -2,37 +2,66 @@ import AppKit
 import ApplicationServices
 
 /// Kept only in the shell, so field contents and AX references do not cross the RPC boundary.
+///
+/// A target is captured when the hotkey goes down and checked again before text is placed. Many web and Electron
+/// fields expose neither a value nor a selection, so capture never requires them: when there is nothing to compare
+/// the check answers "unknown" and the insertion is allowed rather than refusing a dictation that had no problem.
 struct InsertionTarget {
+    /// What can be said about the destination a moment later.
+    enum Verdict {
+        /// Same app, window and field, and nothing observably changed.
+        case current
+        /// The destination is gone or something about it changed: do not type into it.
+        case changed
+        /// Same app and window, but the app exposes too little to prove the field is identical.
+        case unknown
+    }
+
     let pid: pid_t
     let element: AXUIElement
     let window: AXUIElement?
+    let role: String?
+    let subrole: String?
     let value: String?
     let range: CFRange?
 
     static func capture() -> InsertionTarget? {
         guard AXIsProcessTrusted(), let app = NSWorkspace.shared.frontmostApplication,
               let field = AX.focusedElement(), !AX.isSecure(field) else { return nil }
-        let value = AX.string(field, kAXValueAttribute)
-        let range = selectedRange(field)
-        guard value != nil || range != nil else { return nil }
         let application = AXUIElementCreateApplication(app.processIdentifier)
-        return InsertionTarget(pid: app.processIdentifier, element: field,
-            window: AX.element(application, kAXFocusedWindowAttribute), value: value, range: range)
+        return InsertionTarget(
+            pid: app.processIdentifier,
+            element: field,
+            window: AX.element(application, kAXFocusedWindowAttribute),
+            role: AX.string(field, kAXRoleAttribute),
+            subrole: AX.string(field, kAXSubroleAttribute),
+            value: AX.string(field, kAXValueAttribute),
+            range: selectedRange(field),
+        )
     }
 
-    var isCurrent: Bool {
+    /// False only when the destination demonstrably changed. Unknown counts as fine.
+    var isCurrent: Bool { verdict != .changed }
+
+    var verdict: Verdict {
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
-              let current = AX.focusedElement(), CFEqual(element, current), !AX.isSecure(current) else { return false }
-        if let window {
-            guard let currentWindow = AX.element(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute),
-                  CFEqual(window, currentWindow) else { return false }
+              let current = AX.focusedElement(), !AX.isSecure(current) else { return .changed }
+        if let value, let now = AX.string(current, kAXValueAttribute), now != value { return .changed }
+        if let range, let now = Self.selectedRange(current), now.location != range.location || now.length != range.length {
+            return .changed
         }
-        if let value, AX.string(current, kAXValueAttribute) != value { return false }
-        if let range {
-            guard let currentRange = Self.selectedRange(current), currentRange.location == range.location,
-                  currentRange.length == range.length else { return false }
+        if let window, let currentWindow = AX.element(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute),
+           !CFEqual(window, currentWindow) {
+            return .changed
         }
-        return true
+        if CFEqual(element, current) { return .current }
+        // WebKit and Electron rebuild AX wrappers, so identity is not stable. Matching role, subrole and window is
+        // as much as those apps expose; assume the caret is still where it was instead of rejecting the text.
+        let currentRole = AX.string(current, kAXRoleAttribute)
+        if let role, role == currentRole {
+            if subrole == nil || subrole == AX.string(current, kAXSubroleAttribute) { return .unknown }
+        }
+        return .changed
     }
 
     func restore() {

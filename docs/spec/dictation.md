@@ -17,7 +17,7 @@ The user holds a global hotkey and speaks. When they let go, cleaned text appear
 | error | any step fails; a short notice says which step and offers retry with the same audio while it is still in memory (D) | idle |
 
 - A **toggle mode** (tap to start, tap to stop) is a setting, default off (D).
-- **Double-tap lock** (Mac, a setting, default on): two quick taps of the hotkey (each under 0.3 s, the second starting within 0.4 s of the first being let go) lock whatever the hold would do: dictation, agent (Shift), edit (Command) or Circle to Ask (Control). It keeps going after the key is let go, and the next press stops it: for dictation, agent and edit that ends the recording and sends it; for Circle to Ask it closes the overlay if nothing was drawn. A drawn loop ends a Circle lock by itself. While locked, pressing Shift, Command or Control still switches the mode, as it does during a hold. Esc cancels. The first, short tap is dropped like any accidental tap. It does nothing in toggle mode.
+- **Double-tap lock** (Mac, a setting, default on): two quick taps of the hotkey (each under 0.3 s, the second starting within 0.4 s of the first being let go) lock whatever the hold would do: dictation, agent (Shift), edit (Command) or Circle to Ask (Control). It keeps going after the key is let go, and the next press stops it: for dictation, agent and edit that ends the recording and sends it; for Circle to Ask it closes the overlay if nothing was drawn. A drawn loop ends a Circle lock by itself. While locked, pressing Shift, Command or Control still switches the mode, as it does during a hold. Esc cancels. The first tap keeps recording through the 0.4 s gap, so a second tap locks the same recording without losing the first word; a lone tap is still dropped. It does nothing in toggle mode.
 - Audio lives only in memory and is dropped after the transcript is produced or the error notice is dismissed (B-P1, D).
 
 ## Cleanup pipeline
@@ -50,6 +50,8 @@ A list of entries `{category, before, after}`, shown in a small popover the user
 | 3 | Synthetic key typing | Last resort, for fields that block paste; ≤ 2,000 characters |
 
 (D). If all fail, the text is copied to the clipboard and a notice says so (D).
+
+Guarded insertions remember the app, window and focused field when the hotkey goes down and check them again before placing text (D). Apps that expose no readable value or selection (common in web and Electron fields) make the check inconclusive, and the text is inserted into the still-focused field. Only a demonstrable change — a different app or window, changed field contents or a moved caret — leaves the text in Tasks & results instead.
 
 ## Latency budget (D)
 

@@ -16,9 +16,13 @@ At hotkey-down the shell captures, in this order of preference (D):
 
 Plus: the app name, window title and app category (`tone-context.md`). The context is in the first user message, clearly labeled as screen content, and the system prompt says screen content is data, not instructions (prompt-injection guard).
 
+## Memory (D)
+
+`SOUL.md` and the relevant facts from `MEMORY.md` are appended to the system prompt as `<about_you>` and `<memory>`, both labeled as data (`memory.md`). They are read fresh for every request, so hand edits take effect immediately. Explicit “remember”, “forget” and “what do you remember” commands are answered by the core without a model; after a successful reply, an optional extraction call adds durable facts. A memory write failure never changes the reply.
+
 ## Loop (D)
 
-1. Build the request: system prompt (original to Murmur), context, transcript, the enabled tools.
+1. Build the request: system prompt (original to Murmur, plus memory), context, transcript, the enabled tools.
 2. Call the LLM. If it returns tool calls, run each in order:
    - Unknown tool → error result.
    - Gated tool → approval gate (`approval-gate.md`). Cancel → result "The user cancelled this action." The model may adapt but must not retry the same call without a change.

@@ -4,6 +4,7 @@ import type { ImageInput, Pcm16Audio } from "../core/types.js";
 import type { ApprovalResponse, ApprovalUi, FinalDecision } from "../gate/gate.js";
 import type { Preview } from "../gate/preview.js";
 import { catalog, resolveLocale } from "../i18n/index.js";
+import type { MemoryKind } from "../memory/store.js";
 import type { SecretStore } from "../secrets/store.js";
 import { JsonRpcPeer, RpcError, RpcErrors } from "./peer.js";
 
@@ -167,6 +168,34 @@ export function registerMethods(peer: JsonRpcPeer, core: MurmurCore, approvals: 
     })
     .handle("conversation.status", () => ({ turns: core.conversation.length }))
     .handle("conversation.history", () => core.conversation.snapshot())
+    .handle("memory.status", () => core.memoryStatus())
+    .handle("memory.add", (p) => {
+      const kind = typeof p.kind === "string" ? p.kind : "other";
+      if (!["person", "project", "preference", "decision", "other"].includes(kind)) {
+        throw new RpcError(RpcErrors.invalidParams, "kind must be person, project, preference, decision or other");
+      }
+      core.memory.remember([{ text: str(p.text, "text"), kind: kind as MemoryKind }]);
+      return core.memoryStatus();
+    })
+    .handle("memory.remove", (p) => {
+      core.memory.forget(str(p.id, "id"));
+      return core.memoryStatus();
+    })
+    .handle("memory.clear", () => {
+      core.memory.clear();
+      return core.memoryStatus();
+    })
+    .handle("memory.replace", (p) => {
+      core.memory.replace(str(p.text, "text"));
+      return core.memoryStatus();
+    })
+    .handle("memory.soul.set", (p) => {
+      core.memory.setSoul(str(p.text, "text"));
+      return core.memoryStatus();
+    })
+    .handle("memory.search", (p) => ({
+      facts: core.memory.search(typeof p.query === "string" ? p.query : "", typeof p.limit === "number" ? p.limit : 20),
+    }))
     .handle("providers.catalog", () => core.providerCatalog())
     .handle("tts.synthesize", (p) => core.synthesize(str(p.text, "text")))
 

@@ -153,6 +153,9 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     lazy var windows = WindowManager(model: self)
 
     private var pressStarted = Date()
+    /// Cancels a single tap when no second tap follows. Keeping the recording alive through the gap is what makes
+    /// double-tap-to-lock continuous instead of a cancel and restart.
+    private var tapCancel: DispatchWorkItem?
     private var reportTimer: Timer?
     private var restartDelay: TimeInterval = 1
     private var permissionTimer: Timer?
@@ -169,13 +172,14 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         registerCoreHandlers()
         startCore()
         audio.onLevel = { [weak self] value in self?.level = value }
-        hotkey.onDown = { [weak self] action in
+        hotkey.onDown = { [weak self] action, continued in
+            guard let self else { return }
             // A press that could not start listening must not leave a lock behind.
-            if self?.hotkeyDown(action) == false { self?.hotkey.releaseLock() }
+            if self.hotkeyDown(action, continued: continued) == false { self.hotkey.releaseLock() }
         }
         hotkey.onLockChange = { [weak self] locked in self?.dictationLocked = locked }
         hotkey.doubleTapLock = UserDefaults.standard.object(forKey: "doubleTapLock") as? Bool ?? true
-        hotkey.onUp = { [weak self] in self?.hotkeyUp() }
+        hotkey.onUp = { [weak self] fromLock in self?.hotkeyUp(fromLock: fromLock) }
         updater.onFound = { [weak self] version in
             self?.postNotification(title: L("update.available", ["version": version]), body: L("update.notify_body"))
         }
@@ -252,7 +256,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
         core.handle("text.insert") { params, reply in
             if params["guardTarget"] as? Bool == true, !self.windows.onboardingIsKey,
-               self.insertionTarget?.isCurrent != true {
+               self.insertionTarget?.verdict == .changed {
                 reply(.success(["ok": false, "method": "none", "reason": "target_changed"]))
                 return
             }
@@ -266,7 +270,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         core.handle("text.replaceRecent") { params, reply in
             reply(.success(["ok": RecentInsertion.replace(expected: params["expected"] as? String ?? "", with: params["replacement"] as? String ?? "")]))
         }
-        core.handle("text.selectAll") { _, reply in reply(.success(["ok": self.insertionTarget?.isCurrent == true && TextInserter.selectAll()])) }
+        core.handle("text.selectAll") { _, reply in reply(.success(["ok": self.insertionTarget?.verdict != .changed && TextInserter.selectAll()])) }
         core.handle("context.capture") { _, reply in reply(.success(ContextCapture.capture())) }
         core.handle("secret.get") { params, reply in
             let key = params["key"] as? String ?? ""
@@ -335,9 +339,22 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
 
     /// False when the press did not start listening.
     @discardableResult
-    private func hotkeyDown(_ action: HotkeyAction) -> Bool {
+    private func hotkeyDown(_ action: HotkeyAction, continued: Bool = false) -> Bool {
         guard !setupRecording, !setupBusy else { return false }
         guard ![ShellState.transcribing, .cleaning, .inserting].contains(state), editReview == nil else { return false }
+        // The second tap of a double tap arrives while the first tap's recording is still running on purpose.
+        // Keep it rather than cancel and restart: a restart loses the first word and can be refused while the
+        // microphone is still stopping.
+        tapCancel?.cancel()
+        tapCancel = nil
+        if continued, state == .listening, audio.isRecording {
+            insertionTarget = insertionTarget ?? InsertionTarget.capture()
+            return true
+        }
+        if !continued, state == .listening, audio.isRecording {
+            // A fresh press after a tap that was not followed by a second one: end that recording before starting.
+            cancelListening()
+        }
         insertionTarget = InsertionTarget.capture()
         if let queued = queuedRecovery, action == .dictate {
             queuedRecovery = nil
@@ -376,7 +393,9 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         return true
     }
 
-    private func hotkeyUp() {
+    private func hotkeyUp(fromLock: Bool = false) {
+        tapCancel?.cancel()
+        tapCancel = nil
         if let replay = replayOnRelease {
             replayOnRelease = nil
             core.request("dictation.start")
@@ -387,7 +406,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
                 core.request(replay.entry.transcript.isEmpty ? "dictation.retry" : method, params, timeout: 300) { [weak self] result in
                     if case let .failure(error) = result { self?.showError(error.localizedDescription) }
                 }
-            } else if insertionTarget?.isCurrent == true {
+            } else if insertionTarget?.verdict != .changed {
                 let result = TextInserter.insert(replay.entry.text)
                 RecentInsertion.remember(replay.entry.text, ok: result.ok)
                 if result.ok { state = .idle } else { showError(L("report.copied")) }
@@ -407,8 +426,19 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
         guard state == .listening else { return }
         Cue.play(start: false, enabled: soundOn)
-        if Date().timeIntervalSince(pressStarted) < 0.3 {
-            cancelListening()
+        // A short press may be the first half of a double tap, so keep recording through the gap. A second tap
+        // locks the same recording; a single tap is cancelled when the gap closes. Ending a lock always transcribes.
+        if !fromLock, Date().timeIntervalSince(pressStarted) < DoubleTapLock.tapLimit {
+            guard hotkey.doubleTapLock else {
+                cancelListening()
+                return
+            }
+            let work = DispatchWorkItem { [weak self] in
+                guard let self, self.state == .listening, !self.hotkey.isLocked else { return }
+                self.cancelListening()
+            }
+            tapCancel = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + DoubleTapLock.gap, execute: work)
             return
         }
         state = .transcribing
@@ -770,6 +800,8 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     }
 
     func cancelListening() {
+        tapCancel?.cancel()
+        tapCancel = nil
         queuedRecovery = nil
         replayOnRelease = nil
         reviewEdit(false)
@@ -1382,7 +1414,7 @@ final class AppModel: NSObject, ObservableObject, UNUserNotificationCenterDelega
     private func checkMicrophoneIsNotStuck() {
         let problem = MicGuard.problem(
             recording: audio.isRecording, state: state, toggleMode: hotkey.toggleMode,
-            tapRunning: hotkey.isRunning, keyHeld: hotkey.isPhysicallyHeld)
+            tapRunning: hotkey.isRunning, keyHeld: hotkey.isPhysicallyHeld, locked: hotkey.isLocked)
         guard let problem else { stuckTicks = 0; return }
         let lostRelease = problem == .releaseLost
         stuckTicks += 1

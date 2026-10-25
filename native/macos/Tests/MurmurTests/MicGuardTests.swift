@@ -2,8 +2,8 @@ import XCTest
 @testable import Murmur
 
 final class MicGuardTests: XCTestCase {
-    private func problem(_ recording: Bool, _ state: ShellState, toggle: Bool = false, running: Bool = true, held: Bool = true) -> MicGuard.Problem? {
-        MicGuard.problem(recording: recording, state: state, toggleMode: toggle, tapRunning: running, keyHeld: held)
+    private func problem(_ recording: Bool, _ state: ShellState, toggle: Bool = false, running: Bool = true, held: Bool = true, locked: Bool = false) -> MicGuard.Problem? {
+        MicGuard.problem(recording: recording, state: state, toggleMode: toggle, tapRunning: running, keyHeld: held, locked: locked)
     }
 
     func testNothingOpenIsFine() {
@@ -32,5 +32,9 @@ final class MicGuardTests: XCTestCase {
     func testToggleModeAndDeadTapAreNotTreatedAsLostRelease() {
         XCTAssertNil(problem(true, .listening, toggle: true, held: false))
         XCTAssertNil(problem(true, .listening, running: false, held: false))
+    }
+
+    func testLockedDictationKeepsTheMicrophoneOpen() {
+        XCTAssertNil(problem(true, .listening, held: false, locked: true))
     }
 }

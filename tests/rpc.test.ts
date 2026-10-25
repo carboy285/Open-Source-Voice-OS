@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -25,6 +25,8 @@ async function start(llm?: LlmProvider) {
     stt: { transcribe: async () => ({ text: "um send the the report to ana" }) },
     llm,
   });
+  // Memory learning adds a model call per turn; this suite counts requests.
+  core.settings.set("memory.autoRemember", false);
   closers.push(() => core.close());
   return { ...s, core };
 }
@@ -201,12 +203,49 @@ describe("core ↔ shell protocol", () => {
     });
   });
 
+  it("reads, edits and clears memory through the shell protocol", async () => {
+    type MemoryStatus = {
+      enabled: boolean;
+      autoRemember: boolean;
+      facts: Array<{ id: string; text: string; kind: string }>;
+      path: string;
+      soul: string;
+    };
+    const { shell } = await start();
+    const empty = (await shell.request("memory.status")) as MemoryStatus;
+    expect(empty).toMatchObject({ enabled: true, autoRemember: false, facts: [] });
+    expect(empty.path).toMatch(/MEMORY\.md$/);
+
+    const added = (await shell.request("memory.add", { text: "Ana is my sister", kind: "person" })) as MemoryStatus;
+    expect(added.facts).toEqual([expect.objectContaining({ text: "Ana is my sister", kind: "person" })]);
+    await shell.request("memory.add", { text: "Prefers short answers", kind: "preference" });
+
+    expect(await shell.request("memory.search", { query: "ana" })).toEqual({
+      facts: [expect.objectContaining({ text: "Ana is my sister" })],
+    });
+    expect(await shell.request("memory.soul.set", { text: "# Quiet" })).toMatchObject({ soul: "# Quiet" });
+
+    const id = ((await shell.request("memory.status")) as MemoryStatus).facts.find(
+      (fact) => fact.text === "Ana is my sister",
+    )!.id;
+    const removed = (await shell.request("memory.remove", { id })) as MemoryStatus;
+    expect(removed.facts).toHaveLength(1);
+    expect(((await shell.request("memory.clear")) as MemoryStatus).facts).toEqual([]);
+    await expect(shell.request("memory.add", { text: "x", kind: "nonsense" })).rejects.toMatchObject({
+      code: RpcErrors.invalidParams,
+    });
+  });
+
   it("deletes all data, including keychain entries", async () => {
     const { shell, secrets, core } = await start();
     secrets.set("llm/apiKey", "sk-test");
     await shell.request("dictionary.add", { written: "Murmur" });
+    core.memory.remember([{ text: "Ana is my sister", kind: "person" }]);
+    const memoryPath = core.memory.memoryPath;
+    expect(existsSync(memoryPath)).toBe(true);
     await shell.request("data.deleteAll");
     expect(secrets.size).toBe(0);
     expect(core.dictionary.list()).toEqual([]);
+    expect(existsSync(memoryPath)).toBe(false);
   });
 });

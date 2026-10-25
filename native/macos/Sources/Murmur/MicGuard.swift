@@ -9,12 +9,15 @@ enum MicGuard {
         case releaseLost
     }
 
-    static func problem(recording: Bool, state: ShellState, toggleMode: Bool, tapRunning: Bool, keyHeld: Bool) -> Problem? {
+    static func problem(
+        recording: Bool, state: ShellState, toggleMode: Bool, tapRunning: Bool, keyHeld: Bool, locked: Bool = false
+    ) -> Problem? {
         guard recording else { return nil }
         // The short tail after a release is expected: the mic stays open while the state is already "transcribing".
         if state == .transcribing { return nil }
         if state != .listening { return .stateLost }
-        if !toggleMode, tapRunning, !keyHeld { return .releaseLost }
+        // Toggle mode and a double-tap lock both keep recording without the key held. That is not a lost release.
+        if !toggleMode, !locked, tapRunning, !keyHeld { return .releaseLost }
         return nil
     }
 }

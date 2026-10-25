@@ -16,5 +16,6 @@ One SQLite database in the per-user app data directory (macOS `~/Library/Applica
 | schema_version | single integer | migrations run in order at startup |
 
 - Turning off `history.saveTranscripts` offers to delete the stored text (D).
-- "Delete all data" in Settings removes the database file and keychain entries (D).
+- "Delete all data" in Settings removes the database file, `SOUL.md`, `MEMORY.md` and keychain entries (D).
+- Memory lives beside the database as two Markdown files, `SOUL.md` and `MEMORY.md`, mode `0600` (`memory.md`). They are not in the database.
 - Retention: history 30 days, tasks 30 days, both settings (D).

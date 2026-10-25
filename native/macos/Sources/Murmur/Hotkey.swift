@@ -12,8 +12,10 @@ enum HotkeyAction {
 final class HotkeyMonitor {
     /// kVK_RightOption. kVK_RightCommand is 54, kVK_Function is 63.
     var keyCode: Int64 = 61
-    var onDown: ((HotkeyAction) -> Void)?
-    var onUp: (() -> Void)?
+    /// `continued` is true for the second tap of a double tap: the recording is already running and should keep going.
+    var onDown: ((HotkeyAction, Bool) -> Void)?
+    /// `fromLock` is true when the release ends a locked dictation rather than a normal tap or hold.
+    var onUp: ((Bool) -> Void)?
     /// Shift or Command pressed after the hotkey went down: the hold switches to agent or edit.
     var onActionChange: ((HotkeyAction) -> Void)?
     var onEscape: (() -> Void)?
@@ -139,11 +141,11 @@ final class HotkeyMonitor {
             if toggleMode {
                 if isDown {
                     isDown = false
-                    DispatchQueue.main.async { self.onUp?() }
+                    DispatchQueue.main.async { self.onUp?(true) }
                 } else {
                     isDown = true
                     self.action = action
-                    DispatchQueue.main.async { self.onDown?(action) }
+                    DispatchQueue.main.async { self.onDown?(action, false) }
                 }
             } else if !isDown {
                 isDown = true
@@ -151,25 +153,25 @@ final class HotkeyMonitor {
                 // Every hold works the same way: dictation, agent, edit and Circle to Ask can all be locked.
                 switch lock.press(at: now, enabled: doubleTapLock) {
                 case .start:
-                    DispatchQueue.main.async { self.onDown?(action) }
+                    DispatchQueue.main.async { self.onDown?(action, false) }
                 case .lock:
                     DispatchQueue.main.async {
                         self.onLockChange?(true)
-                        self.onDown?(action)
+                        self.onDown?(action, true)
                     }
                 case .stop:
                     // The press that ends a locked dictation. The release after it does nothing.
                     isDown = false
                     DispatchQueue.main.async {
                         self.onLockChange?(false)
-                        self.onUp?()
+                        self.onUp?(true)
                     }
                 }
             }
         } else if isDown, !toggleMode {
             isDown = false
             // A locked dictation keeps listening after the key is let go.
-            if lock.release(at: now) { DispatchQueue.main.async { self.onUp?() } }
+            if lock.release(at: now) { DispatchQueue.main.async { self.onUp?(false) } }
         }
     }
 
