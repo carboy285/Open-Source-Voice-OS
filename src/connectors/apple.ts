@@ -2,7 +2,7 @@ import { parseWhen } from "../reminders/parse.js";
 import { addDays, formatLocal, wallTime, zoned } from "../reminders/time.js";
 import { clip, objectSchema, str, strList, type Connector, type ConnectorContext } from "./types.js";
 
-/** Asks the Mac app to run something with Apple's own Mail, Calendar or Reminders. */
+/** Asks the Mac app to run something with Apple's own Mail, Calendar, Reminders or Notes. */
 export type NativeCall = (service: string, action: string, args: Record<string, unknown>) => Promise<unknown>;
 
 type Obj = Record<string, unknown>;
@@ -308,7 +308,39 @@ function mail(call: NativeCall): Connector {
   };
 }
 
-/** Mail, Calendar and Reminders on a Mac. The Mac app does the work; these describe it to the agent. */
+function notes(call: NativeCall): Connector {
+  return {
+    id: "apple_notes",
+    name: "Notes (Mac)",
+    description: "Save a note in the Notes app on this Mac.",
+    icon: "note",
+    auth: { type: "none" },
+    status: "ready",
+    actions: [
+      {
+        name: "create",
+        description: "Create a note in the Notes app. The user reviews it first.",
+        inputSchema: objectSchema(
+          {
+            title: { type: "string", minLength: 1 },
+            body: { type: "string", description: "Plain text. Line breaks are kept." },
+          },
+          ["title"],
+        ),
+        effects: { modifies: true },
+        verb: "Save",
+        fields: { title: { label: "Title" }, body: { label: "Note", type: "longtext" } },
+        summarize: (input) => `Save a note in Notes: "${oneLine(str(input.title), 50)}"`,
+        async run(input) {
+          await call("notes", "create", { title: str(input.title), body: str(input.body) });
+          return `Saved the note "${str(input.title)}" in Notes.`;
+        },
+      },
+    ],
+  };
+}
+
+/** Mail, Calendar, Reminders and Notes on a Mac. The Mac app does the work; these describe it to the agent. */
 export function appleConnectors(call: NativeCall): Connector[] {
-  return [mail(call), calendar(call), reminders(call)];
+  return [mail(call), calendar(call), reminders(call), notes(call)];
 }

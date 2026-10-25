@@ -5,8 +5,8 @@ import os
 
 private let log = Logger(subsystem: "app.murmur", category: "apple")
 
-/// Answers the core's `apple.call` with the Mac's own Calendar, Reminders and Mail.
-/// Calendar and Reminders use EventKit; Mail has no API, so it is driven with a short AppleScript run by
+/// Answers the core's `apple.call` with the Mac's own Calendar, Reminders, Mail and Notes.
+/// Calendar and Reminders use EventKit; Mail and Notes have no API, so they are driven with a short AppleScript run by
 /// osascript. macOS asks the user once per app, and every request here names a connector the user turned on.
 enum AppleBridge {
     private static let store = EKEventStore()
@@ -16,6 +16,7 @@ enum AppleBridge {
         case "calendar": calendar(action, args, reply)
         case "reminders": reminders(action, args, reply)
         case "mail": mail(action, args, reply)
+        case "notes": notes(action, args, reply)
         case "computer": ComputerBridge.call(action: action, args: args, reply: reply)
         default: reply(.failure(fail("Unknown service \(service).")))
         }
@@ -238,8 +239,26 @@ enum AppleBridge {
         }
     }
 
+    // MARK: Notes
+
+    private static func notes(_ action: String, _ args: JSONObject, _ reply: @escaping (Result<Any, Error>) -> Void) {
+        switch action {
+        case "create":
+            let title = args["title"] as? String ?? ""
+            let html = NotesScripts.html(title: title, body: args["body"] as? String ?? "")
+            runScript(NotesScripts.create, [title, html], app: "Notes") { result in
+                switch result {
+                case let .failure(error): reply(.failure(error))
+                case .success: reply(.success(["ok": true]))
+                }
+            }
+        default:
+            reply(.failure(fail("Unknown notes action \(action).")))
+        }
+    }
+
     /// Runs `osascript` with the script on stdin and the values as arguments, so nothing is pasted into the script text.
-    private static func runScript(_ script: String, _ arguments: [String], done: @escaping (Result<String, Error>) -> Void) {
+    private static func runScript(_ script: String, _ arguments: [String], app: String = "Mail", done: @escaping (Result<String, Error>) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -251,7 +270,7 @@ enum AppleBridge {
             do {
                 try process.run()
             } catch {
-                return DispatchQueue.main.async { done(.failure(fail("Couldn't start Mail: \(error.localizedDescription)"))) }
+                return DispatchQueue.main.async { done(.failure(fail("Couldn't start \(app): \(error.localizedDescription)"))) }
             }
             input.fileHandleForWriting.write(Data(script.utf8))
             input.fileHandleForWriting.closeFile()
@@ -269,9 +288,9 @@ enum AppleBridge {
                 let text = String(decoding: problem, as: UTF8.self)
                 log.error("osascript failed: \(text, privacy: .private)")
                 if text.contains("-1743") || text.localizedCaseInsensitiveContains("not allowed") {
-                    done(.failure(fail("Murmur needs permission to control Mail. Allow it in System Settings > Privacy & Security > Automation, then try again.")))
+                    done(.failure(fail("Murmur needs permission to control \(app). Allow it in System Settings > Privacy & Security > Automation, then try again.")))
                 } else {
-                    done(.failure(fail("Mail couldn't do that.")))
+                    done(.failure(fail("\(app) couldn't do that.")))
                 }
             }
         }
@@ -344,4 +363,24 @@ enum MailScripts {
         return "ok"
     end run
     """
+}
+
+/// AppleScript for Notes. Values arrive in `argv`; the body is HTML built by `html`, so the user's text is escaped.
+enum NotesScripts {
+    static let create = """
+    on run argv
+        tell application "Notes" to make new note with properties {name:(item 1 of argv), body:(item 2 of argv)}
+        return "ok"
+    end run
+    """
+
+    /// Notes stores HTML. The title becomes the first line, which Notes uses as the note's name.
+    static func html(title: String, body: String) -> String {
+        func escape(_ text: String) -> String {
+            text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
+        }
+        let lines = body.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+        let paragraphs = body.isEmpty ? "" : lines.map { $0.isEmpty ? "<div><br></div>" : "<div>\(escape($0))</div>" }.joined()
+        return "<h1>\(escape(title))</h1>\(paragraphs)"
+    }
 }

@@ -31,6 +31,7 @@ A connector provides:
 | Notion | oauth2 | search (ro), create page (modifies) | skeleton |
 | Linear | oauth2 | search issues (ro), create issue (modifies) | skeleton |
 | Google Drive / Docs | oauth2 | search (ro), create doc (modifies) | skeleton |
+| Notes (macOS) | none (Automation permission) | create (modifies) | implement; driven by AppleScript like Mail, with the text passed as arguments (D) |
 | Messages (macOS) | local | send (sends) | open question: no public API; would need AppleScript and the Automation permission |
 
 "Skeleton" means the metadata, schemas and summaries are complete and tested, while network calls are wired but need the user's own OAuth client id.

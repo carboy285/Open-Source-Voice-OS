@@ -139,16 +139,17 @@ In Settings › Agent, add an Anthropic API key or a local OpenAI-compatible ser
 7. Disconnect Google Calendar, then say "What's on my calendar?" The agent asks to connect it (an approval named "Connect an app"). Approve it, finish the sign-in, and it carries on and answers.
 8. Remove the key, then ask for your calendar again: you are told to add the Composio key in Settings › Apps.
 
-### 4.6 Mail, Calendar and Reminders on this Mac
+### 4.6 Mail, Calendar, Reminders and Notes on this Mac
 
-1. Settings › Connectors: turn on "Mail (Mac)", "Calendar (Mac)" and "Reminders (Mac)".
+1. Settings › Connectors: turn on "Mail (Mac)", "Calendar (Mac)", "Reminders (Mac)" and "Notes (Mac)".
 2. Say "Summarize my unread mail." macOS asks whether Murmur may control Mail; allow it. The reply names real senders and subjects. No approval appears.
 3. Say "Read the one from <sender>." The reply summarizes that message.
 4. Say "What's on my Apple calendar this week?" macOS asks for Calendar access; allow it. The events match the Calendar app.
 5. Say "Remind me to call Mum tomorrow at 5." An approval appears. After you approve, the item is in the Reminders app with that time.
 6. Say "What's on my reminders?" and then "Mark the call Mum one as done." Approve; the item is checked off in Reminders.
 7. Say "Draft an email to <someone> saying I'll be late." An approval appears; after approving, a draft window opens in Mail. Nothing is sent.
-8. Deny a permission in System Settings › Privacy & Security, ask again: the reply tells you where to allow it.
+8. Say "Save a note called Trip ideas with Lisbon and Porto on separate lines." macOS asks whether Murmur may control Notes; allow it. An approval appears; after you approve, a note named "Trip ideas" is in Notes with each place on its own line. A title like `a < b & c` shows exactly as typed.
+9. Deny a permission in System Settings › Privacy & Security, ask again: the reply tells you where to allow it.
 
 ### 4.7 Coding agents (Codex, Claude Code, OpenCode)
 

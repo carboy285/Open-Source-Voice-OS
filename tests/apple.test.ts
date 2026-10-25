@@ -14,7 +14,7 @@ function setup(reply: unknown = {}) {
   };
   const ctx = context({}, { clock: { now: () => NOW }, timeZone: "UTC", locale: "en-US" });
   const registry = new ConnectorRegistry(
-    new MemoryRegistryState(new Set(["apple_mail", "apple_calendar", "apple_reminders"])),
+    new MemoryRegistryState(new Set(["apple_mail", "apple_calendar", "apple_reminders", "apple_notes"])),
     () => ctx,
   ).register(...appleConnectors(native));
   return { calls, registry };
@@ -26,7 +26,12 @@ describe("Apple connectors", () => {
       ...appleConnectors(async () => ({})),
     );
     expect(await registry.list()).toEqual([]);
-    expect(registry.catalog().map((c) => c.id)).toEqual(["apple_mail", "apple_calendar", "apple_reminders"]);
+    expect(registry.catalog().map((c) => c.id)).toEqual([
+      "apple_mail",
+      "apple_calendar",
+      "apple_reminders",
+      "apple_notes",
+    ]);
   });
 
   it("read mail, calendar and reminders without asking, and gate every change", async () => {
@@ -42,9 +47,26 @@ describe("Apple connectors", () => {
       "apple_reminders.lists": false,
       "apple_reminders.create": true,
       "apple_reminders.complete": true,
+      "apple_notes.create": true,
     });
     // There is no send action at all.
     expect(Object.keys(gated).some((n) => /send/.test(n))).toBe(false);
+  });
+
+  it("saves a note through the Mac app after approval, with the user's text untouched", async () => {
+    const { registry, calls } = setup({ ok: true });
+    const out = await registry.call("apple_notes.create", { title: "Trip <ideas>", body: "Lisbon\n& Porto" });
+    expect(out).toBe('Saved the note "Trip <ideas>" in Notes.');
+    expect(calls).toEqual([
+      { service: "notes", action: "create", args: { title: "Trip <ideas>", body: "Lisbon\n& Porto" } },
+    ]);
+  });
+
+  it("needs a title for a note and describes it in the approval", async () => {
+    const { registry } = setup({ ok: true });
+    const spec = (await registry.list()).find((s) => s.name === "apple_notes.create")!;
+    expect(spec.inputSchema).toMatchObject({ required: ["title"] });
+    await expect(registry.call("apple_notes.create", { body: "no title" })).rejects.toThrow();
   });
 
   it("lists recent mail from what the Mac app returns", async () => {
