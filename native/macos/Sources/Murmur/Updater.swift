@@ -35,7 +35,8 @@ final class Updater: ObservableObject {
     }
 
     var automatic: Bool {
-        UserDefaults.standard.object(forKey: "autoUpdate") as? Bool ?? true
+        if Bundle.main.object(forInfoDictionaryKey: "MurmurLocalBuild") as? Bool == true { return false }
+        return UserDefaults.standard.object(forKey: "autoUpdate") as? Bool ?? true
     }
 
     /// First check shortly after launch, then every few hours while automatic checks are on.

@@ -6,6 +6,7 @@ struct SidePanelView: View {
     @EnvironmentObject var strings: Strings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var query = ""
+    @State private var request = ""
 
     var body: some View {
         GeometryReader { proxy in
@@ -38,12 +39,70 @@ struct SidePanelView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.l) {
+                    HStack {
+                        Text(L(model.state.menuKey)).font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Cancel") { model.cancelCurrentRequest() }
+                    }
+                    if let review = model.editReview {
+                        VStack(alignment: .leading, spacing: Space.s) {
+                            Text("Review voice edit").font(.headline)
+                            Text("Original").font(.caption).foregroundStyle(.secondary)
+                            Text(review.before).textSelection(.enabled)
+                            Text("Proposed edit").font(.caption).foregroundStyle(.secondary)
+                            Text(review.after).textSelection(.enabled)
+                            HStack {
+                                Button("Replace selection") { model.reviewEdit(true) }.buttonStyle(PressableButtonStyle(prominent: true))
+                                Button("Keep original") { model.reviewEdit(false) }
+                            }
+                        }.padding(Space.m).background(RoundedRectangle(cornerRadius: 10).fill(Color.orange.opacity(0.1)))
+                    }
+                    recovery
+                    VStack(alignment: .leading, spacing: Space.s) {
+                        Text("Ask or follow up").font(.headline)
+                        TextField("Your request", text: $request).textFieldStyle(.roundedBorder)
+                            .onSubmit { sendRequest() }
+                        Button("Send") { sendRequest() }.disabled(request.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.editReview != nil)
+                    }
                     if !model.approvals.isEmpty { approvals }
                     if !model.activeTasks.isEmpty { current }
                     history
                 }
                 .padding(.horizontal, Space.l)
                 .padding(.bottom, Space.l)
+            }
+        }
+    }
+
+    private func sendRequest() {
+        model.askFromPanel(request)
+        request = ""
+    }
+
+    private var recovery: some View {
+        VStack(alignment: .leading, spacing: Space.s) {
+            HStack {
+                Text("Dictation & edits").font(.headline)
+                Spacer()
+                Button("Clear") { model.clearRecovery() }.buttonStyle(.link)
+            }
+            if model.recovery.isEmpty {
+                Text("Results will appear here. Only the latest result is kept unless session history is enabled in Dictation settings.").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(model.recovery) { entry in
+                VStack(alignment: .leading, spacing: Space.s) {
+                    Text("\(entry.mode) · \(entry.status)").font(.caption).foregroundStyle(.secondary)
+                    Text(entry.text.isEmpty ? entry.transcript : entry.text).textSelection(.enabled)
+                    if let error = entry.error { Text(error).font(.caption).foregroundStyle(.secondary) }
+                    HStack {
+                        Button("Copy") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(entry.text.isEmpty ? entry.transcript : entry.text, forType: .string)
+                        }
+                        if !entry.text.isEmpty { Button("Reinsert…") { model.recover(entry, retry: false) } }
+                        Button("Retry…") { model.recover(entry, retry: true) }
+                    }.buttonStyle(.link)
+                }.padding(Space.m).background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04)))
             }
         }
     }
@@ -127,7 +186,7 @@ struct SidePanelView: View {
                         Text(L("panel.status.\(task.status)")).font(.caption).foregroundStyle(.secondary)
                     }
                     if !task.reply.isEmpty {
-                        Text(task.reply).font(.callout).foregroundStyle(.secondary).lineLimit(3)
+                        Text(task.reply).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                     }
                     HStack {
                         Text(task.startedAt, style: .relative).font(.caption).foregroundStyle(.tertiary)

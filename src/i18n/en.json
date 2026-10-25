@@ -462,5 +462,6 @@
   "settings.tts.confirm.button": "Use it",
   "tts.cloud_failed": "The hosted voice didn't work, so this Mac's voice read the reply: {error}",
   "settings.cloud_stt.function_id": "Function ID",
-  "settings.cloud_stt.function_help": "From the model's page on build.nvidia.com: open the Parakeet model, choose Get API Key, and copy the function ID shown there. Sent with each request along with your key."
+  "settings.cloud_stt.function_help": "From the model's page on build.nvidia.com: open the Parakeet model, choose Get API Key, and copy the function ID shown there. Sent with each request along with your key.",
+  "report.destination_changed": "The destination changed. Open Tasks & results to copy or reinsert your text."
 }

@@ -55,9 +55,13 @@ struct GeneralSettings: View {
             Toggle(L("settings.sound"), isOn: flag(model, "sound.enabled", default: true))
             Toggle(L("settings.launch_at_login"), isOn: Binding(get: { launch }, set: { launch = $0; model.setLaunchAtLogin($0) }))
             Toggle(L("settings.updates"), isOn: Binding(
-                get: { UserDefaults.standard.object(forKey: "autoUpdate") as? Bool ?? true },
+                get: { model.updater.automatic },
                 set: { UserDefaults.standard.set($0, forKey: "autoUpdate") }
             ))
+            .disabled(Bundle.main.object(forInfoDictionaryKey: "MurmurLocalBuild") as? Bool == true)
+            if Bundle.main.object(forInfoDictionaryKey: "MurmurLocalBuild") as? Bool == true {
+                Text("Local build: automatic GitHub update checks are paused.").font(.caption).foregroundStyle(.secondary)
+            }
             UpdateSettingsSection(updater: model.updater)
             Section {
                 LabeledContent(L("settings.hotkey.dictate"), value: model.hotkeyName)
@@ -121,6 +125,19 @@ struct DictationSettings: View {
 
     var body: some View {
         Form {
+            Picker("Cleanup", selection: Binding(
+                get: { model.settings["dictation.cleanupMode"] as? String ?? "polished" },
+                set: { model.setSetting("dictation.cleanupMode", $0) }
+            )) {
+                Text("Verbatim").tag("verbatim")
+                Text("Clean up").tag("clean")
+                Text("Polished").tag("polished")
+            }
+            Text("Verbatim preserves recognized wording. Clean up uses local rules. Polished also asks your AI. Dictionary spellings apply in every mode.").font(.caption).foregroundStyle(.secondary)
+            Toggle("Keep recent results in memory for this session", isOn: flag(model, "recovery.sessionHistory"))
+            Text("Off keeps only the latest result for recovery. On keeps up to 20. Clear results or quit to erase them. Transcript storage under Privacy is separate.").font(.caption).foregroundStyle(.secondary)
+            Toggle("Keep Whisper model loaded between recordings", isOn: flag(model, "stt.keepLoaded"))
+            Text("Optional: requires whisper-server on your PATH and a Whisper model. Parakeet and hosted speech keep their existing behavior.").font(.caption).foregroundStyle(.secondary)
             Toggle(L("settings.toggle_mode"), isOn: flag(model, "dictation.toggleMode"))
             Toggle(L("settings.double_tap_lock"), isOn: Binding(
                 get: { UserDefaults.standard.object(forKey: "doubleTapLock") as? Bool ?? true },

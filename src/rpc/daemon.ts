@@ -56,7 +56,9 @@ export class RpcSecretStore implements SecretStore {
 
 export function rpcBridge(peer: JsonRpcPeer): ShellBridge & { approvals: RpcApprovalUi } {
   return {
-    insertText: (text) => peer.request("text.insert", { text }, 10_000),
+    insertText: (text, options) => peer.request("text.insert", { text, ...options }, 10_000),
+    previewEdit: async (before, after) =>
+      (await peer.request<{ approved: boolean }>("text.preview", { before, after }, 300_000)).approved,
     replaceRecent: (expected, replacement) => peer.request("text.replaceRecent", { expected, replacement }, 10000),
     selectAll: () => peer.request("text.selectAll", {}, 3_000),
     captureContext: () => peer.request<CapturedContext>("context.capture", {}, 3_000),

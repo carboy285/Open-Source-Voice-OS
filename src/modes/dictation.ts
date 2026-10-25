@@ -1,6 +1,7 @@
 import type { AppContext, LlmProvider, TextInjector } from "../core/types.js";
 import type { CleanResult } from "../dictation/changes.js";
 import { cleanup, type CleanupOptions } from "../dictation/cleanup.js";
+import { applyDictionary } from "../dictation/dictionary.js";
 import { polish } from "../dictation/polish.js";
 import { categorize, type AppCategory } from "../dictation/tone.js";
 
@@ -9,6 +10,7 @@ export { cleanTranscript, cleanup } from "../dictation/cleanup.js";
 export interface DictationOptions extends Omit<CleanupOptions, "category"> {
   /** When set, the rule-based result is refined by a model that knows the target app. */
   polish?: LlmProvider;
+  mode?: "verbatim" | "clean" | "polished";
   polishTimeoutMs?: number;
   writingInstructions?: string;
   /** User overrides for the app → category table. */
@@ -29,9 +31,14 @@ export async function processDictation(
   options: DictationOptions = {},
 ): Promise<DictationResult> {
   const category = categorize(context, options.categoryOverrides);
+  if (options.mode === "verbatim") {
+    const result = applyDictionary(transcript, options.dictionary ?? []);
+    return { ...result, category, changes: [] };
+  }
   const toneEnabled = !options.toneDisabled?.includes(category);
   const rules = cleanup(transcript, { ...options, category, toneEnabled });
-  if (!rules.text || !options.polish || (category === "code" && toneEnabled)) return { ...rules, category };
+  if (!rules.text || options.mode === "clean" || !options.polish || (category === "code" && toneEnabled))
+    return { ...rules, category };
   const polished = await polish(rules.text, options.polish, {
     category: toneEnabled ? category : "general",
     preserve: options.dictionary?.map((e) => e.written),
