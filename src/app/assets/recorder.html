@@ -2,52 +2,53 @@
 <meta charset="utf-8" />
 <title>Recorder</title>
 <script>
-  // Hidden page that owns the microphone. Collects mono float samples while recording.
-  let stream, context, source, node, chunks = [];
-
-  const workletSource = `
-    class Tap extends AudioWorkletProcessor {
-      process(inputs) {
-        const channel = inputs[0] && inputs[0][0];
-        if (channel) this.port.postMessage(channel.slice(0));
-        return true;
-      }
+  let stream, context, source, node, chunks = [], chain = Promise.resolve();
+  const workletSource = `class Tap extends AudioWorkletProcessor {
+    process(inputs) {
+      const channel = inputs[0] && inputs[0][0];
+      if (channel) this.port.postMessage(channel.slice(0));
+      return true;
     }
-    registerProcessor("tap", Tap);`;
-
-  async function start() {
-    chunks = [];
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-    context = new AudioContext();
-    const url = URL.createObjectURL(new Blob([workletSource], { type: "application/javascript" }));
-    await context.audioWorklet.addModule(url);
-    source = context.createMediaStreamSource(stream);
-    node = new AudioWorkletNode(context, "tap");
-    node.port.onmessage = (event) => chunks.push(event.data);
-    source.connect(node);
-  }
-
+  } registerProcessor("tap", Tap);`;
   async function teardown() {
-    source && source.disconnect();
-    node && node.disconnect();
-    stream && stream.getTracks().forEach((track) => track.stop());
-    const rate = context ? context.sampleRate : 48000;
-    context && (await context.close());
+    source?.disconnect(); node?.disconnect();
+    stream?.getTracks().forEach(track => track.stop());
+    const rate = context?.sampleRate ?? 48000;
+    if (context) await context.close();
     source = node = stream = context = undefined;
     return rate;
   }
-
-  window.voiceos.onRecorderStart(() => start().catch((e) => window.voiceos.sendRecorderError(String(e && e.message || e))));
-
-  window.voiceos.onRecorderStop(async () => {
-    const rate = await teardown();
-    const total = chunks.reduce((n, c) => n + c.length, 0);
-    const samples = new Float32Array(total);
-    let offset = 0;
-    for (const chunk of chunks) { samples.set(chunk, offset); offset += chunk.length; }
-    chunks = [];
-    window.voiceos.sendAudio(samples, rate);
+  async function start() {
+    await teardown(); chunks = [];
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    context = new AudioContext();
+    const url = URL.createObjectURL(new Blob([workletSource], { type: "application/javascript" }));
+    try { await context.audioWorklet.addModule(url); } finally { URL.revokeObjectURL(url); }
+    source = context.createMediaStreamSource(stream);
+    node = new AudioWorkletNode(context, "tap");
+    node.port.onmessage = event => chunks.push(event.data);
+    source.connect(node);
+    node.connect(context.destination); // Worklet has silent output; connecting keeps it processing.
+    await context.resume();
+  }
+  window.voiceos.onRecorderRequest(request => {
+    // Serialize start/stop/cancel so releasing during microphone startup cannot leak a recording.
+    chain = chain.then(async () => {
+      try {
+        if (request.kind === "start") { await start(); window.voiceos.recorderReply({ id: request.id }); }
+        else if (request.kind === "cancel") { await teardown(); chunks = []; window.voiceos.recorderReply({ id: request.id }); }
+        else if (request.kind === "stop") {
+          const sampleRate = await teardown();
+          const samples = new Float32Array(chunks.reduce((n, chunk) => n + chunk.length, 0));
+          let offset = 0;
+          for (const chunk of chunks) { samples.set(chunk, offset); offset += chunk.length; }
+          chunks = [];
+          window.voiceos.recorderReply({ id: request.id, samples, sampleRate });
+        }
+      } catch (error) {
+        await teardown().catch(() => {}); chunks = [];
+        window.voiceos.recorderReply({ id: request.id, error: String(error?.message || error) });
+      }
+    });
   });
-
-  window.voiceos.onRecorderCancel(async () => { await teardown(); chunks = []; });
 </script>

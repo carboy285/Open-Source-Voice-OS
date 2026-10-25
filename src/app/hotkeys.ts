@@ -7,6 +7,7 @@ export interface KeyEvent {
 }
 
 export interface HotkeyTarget {
+  invalidateUndo?(): void;
   press(mode: VoiceMode): void;
   release(): void | Promise<void>;
   cancel(): void | Promise<void>;
@@ -27,6 +28,11 @@ export class HotkeyController {
   ) {}
 
   handle(event: KeyEvent): void {
+    if (event.type === "down" && event.key === "Escape") {
+      this.held = undefined;
+      void this.target.cancel();
+      return;
+    }
     const mode = (Object.keys(this.bindings) as VoiceMode[]).find((m) => this.bindings[m] === event.key);
     if (event.type === "down") {
       if (this.held !== undefined) {
@@ -36,6 +42,7 @@ export class HotkeyController {
         }
         return; // key auto-repeat or a chord in progress
       }
+      if (!mode && !MODIFIERS.has(event.key)) this.target.invalidateUndo?.();
       if (mode) {
         this.held = event.key;
         this.target.press(mode);

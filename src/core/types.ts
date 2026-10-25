@@ -1,6 +1,6 @@
 /** Speech-to-text: turns a recorded audio file into a transcript. */
 export interface SttProvider {
-  transcribe(audioPath: string): Promise<string>;
+  transcribe(audioPath: string, signal?: AbortSignal): Promise<string>;
 }
 
 /** OS-level editing actions a spoken command can trigger. */
@@ -50,6 +50,7 @@ export type Message =
   | { role: "tool"; results: ToolResult[] };
 
 export interface LlmRequest {
+  signal?: AbortSignal;
   system: string;
   messages: Message[];
   tools?: ToolSpec[];

@@ -40,7 +40,7 @@ export class MemoryInjector implements TextInjector {
 
   async replaceSelection(text: string): Promise<void> {
     this.history.push(this.text);
-    this.text = this.selection ? this.text.replace(this.selection, text) : this.text + text;
+    this.text = this.selection ? this.text.replace(this.selection, () => text) : this.text + text;
     this.selection = text;
   }
 

@@ -7,15 +7,23 @@ export const AppConfig = z.object({
   model: z.string().optional(),
   codexBinary: z.string().default("codex"),
   whisperModel: z.string().optional(),
+  whisperBackend: z.enum(["cli", "server"]).default("cli"),
+  whisperServerBinary: z.string().default("whisper-server"),
   whisperBinary: z.string().default("whisper-cli"),
   /** Path to an MCP servers file (see voiceos.mcp.example.json) that gives agent mode its tools. */
   mcpConfig: z.string().optional(),
   /** Refine dictation with the model. Slower because each call starts a Codex run. */
   polishDictation: z.boolean().default(false),
+  cleanupMode: z.enum(["verbatim", "clean", "polished"]).optional(),
+  vocabulary: z.record(z.string(), z.string()).default({}),
+  historyEnabled: z.boolean().default(false),
+  historyLimit: z.number().int().min(1).max(100).default(20),
   /** Saved snippets: the phrase the user says maps to the text that is typed. */
   snippets: z.record(z.string(), z.string()).default({}),
   /** Resolve built-in commands such as "scratch that" and "select all" instead of dictating them. */
   voiceCommands: z.boolean().default(true),
+  /** Play a soft system sound when the notch opens with an agent's response. */
+  notchSound: z.boolean().default(true),
   /** Hold-to-talk keys, by uiohook key name. Defaults avoid keys that type characters. */
   hotkeys: z
     .object({

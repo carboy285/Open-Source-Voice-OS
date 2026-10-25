@@ -11,13 +11,13 @@ export interface CodexRunResult {
 }
 
 /** Runs the codex binary with a prompt on stdin. Replaceable so tests need no real Codex. */
-export type CodexRunner = (args: string[], stdin: string, options: { cwd: string }) => Promise<CodexRunResult>;
+export type CodexRunner = (args: string[], stdin: string, options: { cwd: string; signal?: AbortSignal }) => Promise<CodexRunResult>;
 
 export const DEFAULT_TIMEOUT_MS = 120_000;
 
-export const spawnCodex = (binary: string, timeoutMs = DEFAULT_TIMEOUT_MS): CodexRunner => (args, stdin, { cwd }) =>
+export const spawnCodex = (binary: string, timeoutMs = DEFAULT_TIMEOUT_MS): CodexRunner => (args, stdin, { cwd, signal }) =>
   new Promise((resolve, reject) => {
-    const child = spawn(binary, args, { cwd, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(binary, args, { cwd, signal, killSignal: "SIGKILL", stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     // Codex retries unreachable networks for a long time; give up instead of hanging the assistant.
@@ -25,8 +25,10 @@ export const spawnCodex = (binary: string, timeoutMs = DEFAULT_TIMEOUT_MS): Code
       child.kill("SIGKILL");
       reject(new Error(`Codex did not answer within ${Math.round(timeoutMs / 1000)}s. Check your network and sign-in ("voiceos status").`));
     }, timeoutMs);
-    child.stdout.on("data", (chunk: Buffer) => (stdout += chunk));
-    child.stderr.on("data", (chunk: Buffer) => (stderr += chunk));
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
+    child.stderr.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
+    // If Codex exits before reading the prompt, the write fails with EPIPE; the exit code already reports it.
+    child.stdin.on("error", () => undefined);
     child.on("error", (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
       reject(
@@ -111,9 +113,11 @@ function stripFences(raw: string): string {
 export function parseResponse(raw: string, nextId: () => string): LlmResponse {
   let data: { text?: unknown; tool_calls?: unknown };
   try {
-    data = JSON.parse(stripFences(raw));
+    const parsed: unknown = JSON.parse(stripFences(raw));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+    data = parsed;
   } catch {
-    // The model ignored the schema: treat its message as a plain reply.
+    // The model ignored the schema (or replied with a bare value such as 42): treat its message as a plain reply.
     return { text: raw.trim(), toolCalls: [] };
   }
   const toolCalls: ToolCall[] = [];
@@ -122,7 +126,12 @@ export function parseResponse(raw: string, nextId: () => string): LlmResponse {
     if (typeof name !== "string") continue;
     let input: Record<string, unknown> = {};
     if (typeof input_json === "string" && input_json.trim()) {
-      const parsed: unknown = JSON.parse(input_json);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(input_json);
+      } catch {
+        throw new Error(`Codex sent invalid arguments for tool "${name}".`);
+      }
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) input = parsed as Record<string, unknown>;
     }
     toolCalls.push({ id: nextId(), name, input });
@@ -173,7 +182,7 @@ export class CodexCliLlm implements LlmProvider {
         ...(this.options.model ? ["-m", this.options.model] : []),
         "-",
       ];
-      const result = await this.runner(args, buildPrompt(request), { cwd: dir });
+      const result = await this.runner(args, buildPrompt(request), { cwd: dir, signal: request.signal });
       if (result.code !== 0) {
         const detail = result.stderr.trim().split("\n").slice(-5).join("\n");
         throw new Error(`Codex exited with code ${result.code}. If you are not signed in, run "voiceos login".\n${detail}`);

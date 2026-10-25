@@ -7,6 +7,14 @@ import { MemoryInjector } from "../src/providers/injectors.js";
 
 const reply = (text: string): LlmProvider => ({ complete: async () => ({ text, toolCalls: [] }) });
 
+describe("MemoryInjector", () => {
+  it("replaces the selection literally, without expanding $ patterns", async () => {
+    const injector = new MemoryInjector("price: X", "X");
+    await injector.replaceSelection("$& and $1");
+    expect(injector.text).toBe("price: $& and $1");
+  });
+});
+
 describe("dictate", () => {
   it("inserts cleaned text, optionally polished by a model", async () => {
     const plain = new MemoryInjector();

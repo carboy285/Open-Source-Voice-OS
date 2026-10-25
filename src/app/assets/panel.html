@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Voice OS — Results & settings</title>
+<style>
+:root{color-scheme:dark;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#17191f;color:#f0f1f5}*{box-sizing:border-box}body{margin:0;padding:28px;max-width:1000px;margin:auto}header{display:flex;justify-content:space-between;align-items:center}h1{font-size:24px;margin:0}h2{font-size:17px;margin:0 0 12px}p{line-height:1.5}.muted,small{color:#aeb4c4}button,select,input,textarea{font:inherit;border:1px solid #454c60;background:#282d39;color:inherit;border-radius:8px;padding:8px 12px}button{cursor:pointer}button:hover{background:#38435a}button.primary{background:#4866d8;border-color:#6884f4}button:disabled{opacity:.45;cursor:default}textarea{display:block;width:100%;resize:vertical;min-height:90px}section,article{padding:18px;border:1px solid #363c4c;border-radius:12px;margin:16px 0;background:#1f232d}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}pre,.output{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.55}pre{max-height:280px;overflow:auto}label{display:block;margin:12px 0}select{margin-left:8px}.approval{border-color:#b18c47}#error{color:#ffb6a6;white-space:pre-wrap}#progress{color:#bac8ff}summary{cursor:pointer}#log{max-height:140px;overflow:auto}#empty{text-align:center;padding:28px;color:#aeb4c4}.badge{color:#aeb4c4;font-size:12px}.original{color:#b5bbca}#settings-message{color:#a9d3af}
+</style>
+<header><h1>Voice OS</h1><button id="cancel">Cancel · Esc</button></header>
+<p id="progress" role="status" aria-live="polite">Ready</p>
+<p id="error" role="alert"></p>
+<div id="approvals"></div>
+<details><summary>Activity</summary><ol id="log"></ol></details>
+<section>
+<h2>Ask the agent</h2>
+<form id="followup"><label for="request">New request or follow-up</label><textarea id="request" placeholder="What would you like to do?" required maxlength="16000"></textarea><div class="actions"><button class="primary" type="submit">Send request</button></div></form>
+<small>Follow-ups include the latest completed agent request and reply. Cancel stops subsequent steps; an action already sent to a tool may still finish.</small>
+</section>
+<div class="actions"><h2 style="flex:1">Results</h2><button id="clear">Clear results</button></div>
+<p class="muted">Reinsert and Retry let you choose a destination with a hotkey. Result history is kept in memory on this computer until you clear it or quit.</p>
+<div id="results"></div>
+<section><details id="settings"><summary>Dictation & history settings</summary>
+<form id="preferences">
+<label>Cleanup <select id="mode"><option value="verbatim">Verbatim</option><option value="clean">Clean up</option><option value="polished">Polished</option></select></label>
+<p class="muted">Verbatim keeps the transcript wording and punctuation. Clean up removes fillers and stutters. Polished also asks your model to refine it. Vocabulary replacements apply in every mode.</p>
+<label>Speech engine <select id="backend"><option value="cli">Whisper CLI</option><option value="server">Persistent Whisper server</option></select></label>
+<p class="muted">Persistent mode requires whisper-server on your PATH and a configured whisperModel. It keeps the model loaded between recordings. The first recording loads it.</p>
+<label for="vocabulary">Vocabulary — one “heard phrase = preferred spelling” per line</label><textarea id="vocabulary" placeholder="open ai = OpenAI&#10;ben smith = Ben Smyth"></textarea>
+<label><input id="history" type="checkbox" /> Keep recent results for this session</label>
+<label>Maximum results <input id="limit" type="number" min="1" max="100" value="20" /></label>
+<p class="muted">With history off, only the latest result is kept for recovery. Nothing is saved to disk.</p>
+<button type="submit">Save settings</button><span id="settings-message" role="status"></span>
+</form></details></section>
+<script>
+const $ = id => document.getElementById(id);
+let settingsLoaded = false, lastEntries = '', lastApprovals = '';
+async function action(name, value) {
+  $('error').textContent = '';
+  try {
+    const result = await window.voiceos.panel(name, value);
+    if (!result.ok) throw new Error(result.error);
+    return true;
+  } catch (error) { $('error').textContent = error.message || String(error); return false; }
+}
+function element(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
+function button(text, callback) { const node = element('button', text); node.type = 'button'; node.onclick = callback; return node; }
+window.voiceos.onPanel(update => {
+  $('progress').textContent = update.progress;
+  $('log').replaceChildren(...update.progressLog.map(text => element('li', text)));
+  const signature = JSON.stringify(update.approvals);
+  if (signature !== lastApprovals) {
+    lastApprovals = signature;
+    $('approvals').replaceChildren(...update.approvals.map(item => {
+      const card = element('section', undefined, 'approval'); card.append(element('h2', item.title));
+      if (item.before !== undefined) { card.append(element('h3', 'Original'), element('pre', item.before, 'original'), element('h3', 'Proposed edit')); }
+      card.append(element('pre', item.detail));
+      const buttons = element('div', undefined, 'actions');
+      const allow = button(item.before !== undefined ? 'Replace selection' : 'Allow', () => action('approve', { id:item.id, allow:true })); allow.className='primary';
+      buttons.append(allow, button(item.before !== undefined ? 'Keep original' : 'Deny', () => action('approve', { id:item.id, allow:false })));
+      card.append(buttons); return card;
+    }));
+  }
+  const entriesSignature = JSON.stringify(update.entries);
+  if (entriesSignature !== lastEntries) {
+    lastEntries = entriesSignature;
+    $('results').replaceChildren(...update.entries.map(entry => {
+      const card = element('article');
+      card.append(element('div', `${entry.mode} · ${entry.status} · ${new Date(entry.at).toLocaleTimeString()}`, 'badge'));
+      const transcript = element('details'); transcript.append(element('summary', 'Transcript'), element('pre', entry.transcript)); card.append(transcript);
+      card.append(element('div', entry.text || 'No output yet.', 'output'));
+      if (entry.error) card.append(element('p', entry.error, 'muted'));
+      const buttons = element('div', undefined, 'actions');
+      buttons.append(button('Copy', () => action('copy', entry.id)));
+      if (entry.text) buttons.append(button('Reinsert…', () => action('reinsert', entry.id)));
+      if (entry.mode !== 'agent') buttons.append(button('Retry…', () => action('retry', entry.id)));
+      card.append(buttons); return card;
+    }));
+    if (!update.entries.length) $('results').append(element('p', 'Your next dictation, edit, or agent reply will appear here.', 'muted'));
+  }
+  if (!settingsLoaded) {
+    settingsLoaded = true;
+    $('mode').value=update.settings.cleanupMode; $('backend').value=update.settings.whisperBackend;
+    $('history').checked=update.settings.historyEnabled; $('limit').value=update.settings.historyLimit;
+    $('vocabulary').value=Object.entries(update.settings.vocabulary).map(([a,b])=>`${a} = ${b}`).join('\n');
+  }
+});
+$('cancel').onclick=()=>action('cancel'); $('clear').onclick=()=>action('clear');
+document.addEventListener('keydown',event=>{if(event.key==='Escape')action('cancel');});
+$('followup').onsubmit=async event=>{event.preventDefault();if(await action('followup',$('request').value))$('request').value='';};
+$('preferences').onsubmit=async event=>{
+  event.preventDefault(); const vocabulary={};
+  for (const line of $('vocabulary').value.split('\n').filter(line=>line.trim())) {
+    const separator=line.indexOf('=');
+    if(separator<1||!line.slice(separator+1).trim()){$('error').textContent='Use “heard phrase = preferred spelling” on each vocabulary line.';return;}
+    Object.defineProperty(vocabulary,line.slice(0,separator).trim(),{value:line.slice(separator+1).trim(),enumerable:true});
+  }
+  if(await action('settings',{cleanupMode:$('mode').value,whisperBackend:$('backend').value,vocabulary,historyEnabled:$('history').checked,historyLimit:Number($('limit').value)}))$('settings-message').textContent=' Saved';
+};
+window.voiceos.panel('ready');
+</script>
+</html>

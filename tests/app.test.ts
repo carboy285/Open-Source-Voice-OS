@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseAppConfig } from "../src/app/appConfig.js";
-import { type Exec, MacInjector, resolveMacPath } from "../src/app/macos.js";
+import { type Exec, MacInjector, playSystemSound, resolveMacPath } from "../src/app/macos.js";
 import { type Recorder, type UiState, VoiceSession } from "../src/app/session.js";
 import { encodeWav, resample } from "../src/app/wav.js";
 import { MemoryInjector } from "../src/providers/injectors.js";
@@ -141,7 +141,8 @@ describe("VoiceSession", () => {
     const t = setup();
     await t.tap();
     expect(t.injector.text).toBe("Hello world.");
-    expect(t.events.map(([s]) => s)).toEqual(["listening", "thinking", "done"]);
+    expect(t.events.filter(([state]) => state === "thinking").map(([, text]) => text)).toEqual(["Transcribing…", "Cleaning up…", "Inserting…"]);
+    expect(t.events.at(-1)?.[0]).toBe("done");
     expect(t.log).toEqual(["start", "stop"]);
   });
 
@@ -231,11 +232,27 @@ describe("VoiceSession", () => {
   });
 });
 
+describe("notch sound", () => {
+  it("plays only the built-in system sounds, without waiting for them", () => {
+    const exec = vi.fn(async () => "");
+    playSystemSound("done", exec); playSystemSound("error", exec);
+    expect(exec.mock.calls).toEqual([
+      ["afplay", ["/System/Library/Sounds/Glass.aiff"]],
+      ["afplay", ["/System/Library/Sounds/Basso.aiff"]],
+    ]);
+  });
+  it("ignores a missing sound player", async () => {
+    expect(() => playSystemSound("done", async () => { throw new Error("no afplay"); })).not.toThrow();
+    await new Promise(resolve => setTimeout(resolve));
+  });
+});
+
 describe("app config", () => {
   it("has no snippets and voice commands on by default", () => {
     const config = parseAppConfig(undefined);
     expect(config.snippets).toEqual({});
     expect(config.voiceCommands).toBe(true);
+    expect(config.notchSound).toBe(true);
   });
 
   it("reads snippets from the settings file", () => {

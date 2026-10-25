@@ -42,6 +42,7 @@ export class MacInjector implements TextInjector {
   constructor(
     private readonly exec: Exec = realExec,
     private readonly settleMs = 120,
+    private readonly accessibilitySelection = false,
   ) {}
 
   private readClipboard = () => this.exec("pbpaste", []);
@@ -65,6 +66,14 @@ export class MacInjector implements TextInjector {
   }
 
   async getSelection(): Promise<string> {
+    if (this.accessibilitySelection) {
+      // Reading AXSelectedText avoids synthetic Cmd+C cancelling a held edit hotkey.
+      return (await osascript(this.exec, `tell application "System Events"
+        set p to first application process whose frontmost is true
+        set field to value of attribute "AXFocusedUIElement" of p
+        return value of attribute "AXSelectedText" of field
+      end tell`)).replace(/\r?\n$/, "");
+    }
     return this.withClipboard(async () => {
       const marker = `voiceos-${Date.now()}`;
       await this.writeClipboard(marker);
@@ -85,6 +94,14 @@ export class MacInjector implements TextInjector {
   }
 }
 
+export type SystemSound = "done" | "error";
+const SOUND_FILES: Record<SystemSound, string> = { done: "Glass", error: "Basso" };
+
+/** Plays a built-in macOS alert sound without waiting for it, so the notch never blocks on audio. */
+export function playSystemSound(sound: SystemSound, exec: Exec = realExec): void {
+  void exec("afplay", [`/System/Library/Sounds/${SOUND_FILES[sound]}.aiff`]).catch(() => undefined);
+}
+
 const EXTRA_PATHS = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"];
 
 /** GUI apps on macOS start with a bare PATH, so tools like `codex` and `whisper-cli` are not found. */
@@ -97,4 +114,42 @@ export async function resolveMacPath(currentPath: string, home: string, exec: Ex
   }
   const parts = [...shellPath.split(":"), ...currentPath.split(":"), ...EXTRA_PATHS, `${home}/.npm-global/bin`];
   return [...new Set(parts.filter(Boolean))].join(":");
+}
+
+/** Capture focus and field contents so a delayed paste can fail closed after navigation or typing. */
+export async function captureMacTarget(exec: Exec = realExec): Promise<string | undefined> {
+  try {
+    const snapshot = await osascript(exec, `tell application "System Events"
+      set p to first application process whose frontmost is true
+      set pid to unix id of p
+      set w to front window of p
+      set field to value of attribute "AXFocusedUIElement" of p
+      set detail to (name of w as text) & "|" & (position of w as text) & "|" & (size of w as text)
+      set detail to detail & "|" & (role of field as text) & "|" & (position of field as text) & "|" & (size of field as text)
+      try
+        set detail to detail & "|document:" & (value of attribute "AXDocument" of w as text)
+      end try
+      try
+        set detail to detail & "|identifier:" & (value of attribute "AXIdentifier" of field as text)
+      end try
+      try
+        set detail to detail & "|value:" & (value of attribute "AXValue" of field as text)
+      end try
+      try
+        set detail to detail & "|range:" & (value of attribute "AXSelectedTextRange" of field as text)
+      end try
+      return (pid as text) & linefeed & detail
+    end tell`);
+    const newline = snapshot.indexOf("\n");
+    const pid = Number(snapshot.slice(0, newline));
+    if (newline < 1 || !Number.isSafeInteger(pid) || pid <= 0) return undefined;
+    return JSON.stringify({ pid, snapshot: snapshot.slice(newline + 1).trim() });
+  } catch { return undefined; }
+}
+
+export async function restoreMacTarget(target: string, exec: Exec = realExec): Promise<void> {
+  const { pid } = JSON.parse(target) as { pid: number };
+  if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error("Invalid destination.");
+  await osascript(exec, `tell application "System Events" to set frontmost of first application process whose unix id is ${pid} to true`);
+  await sleep(150);
 }

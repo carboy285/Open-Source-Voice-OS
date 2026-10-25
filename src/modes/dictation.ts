@@ -35,6 +35,8 @@ export function cleanTranscript(raw: string, options: CleanupOptions = {}): stri
 const POLISH_SYSTEM = `You clean up dictated speech. Fix grammar and punctuation, remove disfluencies, and keep the speaker's meaning, wording and language. Match the formatting conventions of the app described by the user. Reply with the cleaned text only: no quotes, no commentary.`;
 
 export interface DictationOptions extends CleanupOptions {
+  mode?: "verbatim" | "clean" | "polished";
+  vocabulary?: Record<string, string>;
   /** When set, the rule-based result is refined by a model that knows the target app. */
   polish?: LlmProvider;
 }
@@ -45,9 +47,17 @@ export async function dictate(
   context: AppContext = {},
   options: DictationOptions = {},
 ): Promise<string> {
-  let text = cleanTranscript(transcript, options);
+  let text = options.mode === "verbatim" ? transcript : cleanTranscript(transcript, options);
+  // Match all aliases against the original text in one pass, avoiding replacement cascades.
+  const aliases = Object.keys(options.vocabulary ?? {}).filter(Boolean).sort((a, b) => b.length - a.length);
+  if (aliases.length) {
+    const escaped = aliases.map((key) => key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const entries = new Map(aliases.map((key) => [key.toLowerCase(), options.vocabulary![key]!]));
+    text = text.replace(new RegExp(`(?<![\\p{L}\\p{N}_])(?:${escaped.join("|")})(?![\\p{L}\\p{N}_])`, "giu"),
+      (match) => entries.get(match.toLowerCase()) ?? match);
+  }
   if (!text) return "";
-  if (options.polish) {
+  if (options.polish && options.mode !== "verbatim" && options.mode !== "clean") {
     const where = context.appName ? `The text goes into ${context.appName}${context.kind ? ` (${context.kind})` : ""}.` : "";
     const response = await options.polish.complete({
       system: POLISH_SYSTEM,

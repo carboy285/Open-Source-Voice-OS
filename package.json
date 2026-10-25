@@ -1,6 +1,6 @@
 {
   "name": "open-source-voice-os",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Open-source voice layer for your computer: dictation, voice edit and an MCP-powered agent mode.",
   "main": "dist/app/main.js",
   "scripts": {
@@ -9,7 +9,8 @@
     "test": "vitest run",
     "dev": "tsx src/cli/main.ts",
     "app": "npm run build && electron .",
-    "app:dist": "npm run build && electron-builder --mac"
+    "app:dist": "npm run build && electron-builder --mac",
+    "app:pack": "npm run build && electron-builder --mac --dir --config.mac.identity=- --config.directories.output=release"
   },
   "repository": {
     "type": "git",

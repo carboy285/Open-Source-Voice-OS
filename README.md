@@ -4,9 +4,10 @@ An open-source voice layer for your computer, in the spirit of tools like VoiceO
 selected text by voice, and hand tasks to an agent that uses MCP tools (including [REA](https://github.com/morluto/rea)
 for reverse engineering). Written from public product descriptions only; it contains no code from any commercial app.
 
-> **Status: early.** The engine, CLI and the macOS menu-bar app are written, typechecked and unit-tested, but the
-> macOS app has not yet been run on a Mac (it was built on Linux). Expect first-run problems and please report them.
-> Not built yet: the screen-pointing overlay, Windows/Linux shells, and custom vocabulary.
+> **Status: early.** The engine, CLI and the macOS menu-bar app are written, typechecked and unit-tested. The
+> macOS results panel has been smoke-tested in Electron on a Mac. Live microphone capture, permissions, and
+> insertion across real apps still need end-to-end validation. Expect first-run problems and please report them.
+> Not built yet: the screen-pointing overlay and Windows/Linux shells.
 
 ## Use your ChatGPT / Codex plan
 
@@ -28,7 +29,7 @@ Calls take a few seconds because each one starts a Codex process; they time out 
 
 ## macOS app
 
-A menu-bar app (Electron). Hold a key, speak, release:
+A menu-bar app (Electron). Opening the app from Applications also opens Results & settings. Hold a key, speak, release:
 
 | Hold        | Does                                                     |
 | ----------- | -------------------------------------------------------- |
@@ -37,7 +38,11 @@ A menu-bar app (Electron). Hold a key, speak, release:
 | Right ⌃     | Agent: runs your request with MCP tools (REA etc.)       |
 
 If another key is pressed while a hotkey is held (for example ⌘C), the recording is cancelled. A tap shorter than
-0.3 s is ignored. Status appears in a pill at the top of the screen.
+0.3 s is ignored. Status appears in a notch-style overlay at the top of the screen. When an agent request finishes or fails, the
+notch opens on the display your pointer is on with the reply (basic markdown is rendered) and a "What I did" list of
+the tools it ran. It stays open while your pointer is on it; use **×**, **Open in Results**, or **Escape** to close it.
+It plays a soft system sound when it opens; set `"notchSound": false` in the settings file to turn that off. Press
+**Escape** to cancel recording or processing.
 
 ```bash
 brew install whisper-cpp          # local speech-to-text
@@ -49,12 +54,77 @@ Then, from the menu-bar item: **Sign in with ChatGPT (Codex)…**, and **Open se
 to a downloaded ggml model (and `mcpConfig` to give the agent tools). Settings live in
 `~/Library/Application Support/Open Source Voice OS/config.json`.
 
-macOS asks for three permissions: **Microphone**, **Accessibility** (to paste text and copy selections) and
+Voice OS needs three macOS permissions: **Microphone** (requested when you first record), **Accessibility** (to inspect focus and selections and paste text) and
 **Input Monitoring** (to see the hold-to-talk keys). Grant them in System Settings → Privacy & Security, then restart
 the app. Text is inserted by putting it on the clipboard and pressing ⌘V; your previous text clipboard is restored.
+The app checks the original app, window, focused control, and available field contents before insertion. If the
+destination changes or cannot be identified through Accessibility, output is kept in Results instead of pasted.
+These checks depend on the target app’s Accessibility support; focus changes during the final OS paste cannot be atomic.
 Recordings are written to a temporary file for Whisper and deleted right after.
 
-`npm run app:dist` builds an unsigned `.dmg`; signing and notarization need your Apple developer credentials.
+For a local macOS app bundle, run `npm run app:pack`. It creates an ad-hoc-signed app in
+`release/mac-arm64/` (or the folder for your Mac’s architecture). Move **Open Source Voice OS.app** to Applications
+and open it normally; Terminal is not needed to run the installed app. To update a local installation, quit it,
+rebuild the bundle and replace the copy in Applications. Your settings live outside the app bundle and are retained.
+
+`npm run app:dist` builds a `.dmg`; Developer ID signing and notarization need your Apple developer credentials.
+
+## Results, editing, and recovery
+
+Open **Results & settings…** from the menu bar. This window keeps full agent replies, a bounded activity log,
+inline tool approvals, and a follow-up field. Agent follow-ups send the latest completed request and reply along
+with the new request; failed or cancelled actions are never automatically retried.
+
+Voice edits capture the selection when recording begins and show the original and proposed text before replacement.
+**Replace selection** returns focus to the original app, then checks that the destination and selection still match.
+**Keep original** retains the proposed edit without changing your document. Editors must expose selected text through
+macOS Accessibility for voice editing.
+
+Each result has **Copy**, **Reinsert…**, and (for dictation/edits) **Retry…** controls:
+
+- Reinsert hides the panel. Focus your destination, then press and release the dictation hotkey to paste the saved output.
+- Retry hides the panel. Focus the destination (and select text for an edit), then press and release the corresponding hotkey.
+  It reprocesses the saved transcript without recording again.
+- Escape cancels a queued recovery action or the current request. Cancellation stops later agent steps; a tool action already
+  dispatched may still finish. CLI transcription and model subprocesses are terminated on cancellation. Persistent Whisper
+  is stopped and restarted on the next recording.
+
+History is optional and **off by default**: only the latest result remains available for recovery. Enable session history
+in the panel to keep up to 100 results (20 by default). **Clear results** erases them immediately. History is held in memory
+and discarded on quit; audio files are deleted after transcription. Editing, polished dictation, and agent requests still
+send their relevant text to the configured model provider.
+
+## Cleanup modes and vocabulary
+
+Use **Dictation & history settings** in the results panel to switch modes without restarting:
+
+- **Verbatim** preserves the recognized wording, repetitions, casing, and punctuation.
+- **Clean up** removes fillers and stutters and adjusts capitalization and punctuation, without a model call.
+- **Polished** also asks the configured model to refine the text.
+
+Vocabulary maps recognized phrases to preferred spellings, for example `open ai = OpenAI`. Matching is literal,
+case-insensitive, and on word boundaries; longer phrases take precedence. Vocabulary applies in every mode;
+saved snippets remain verbatim. The settings file equivalents are:
+
+```json
+{
+  "cleanupMode": "clean",
+  "vocabulary": { "open ai": "OpenAI", "ben smith": "Ben Smyth" },
+  "historyEnabled": false,
+  "historyLimit": 20,
+  "whisperBackend": "cli"
+}
+```
+
+`cleanupMode` takes precedence over the older `polishDictation` setting. Other settings-file changes still require
+restarting the app; settings saved through the panel take effect immediately.
+
+For faster repeated dictation, select **Persistent Whisper server**. Install `whisper-server` from
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp/blob/master/examples/server/README.md), then configure
+`whisperModel` as usual. The first transcription starts an app-owned server on a random loopback port with a
+random route; subsequent recordings reuse the loaded model. It shuts down on quit or cancellation. The app
+uses its WAV input directly, without ffmpeg conversion. If the binary is outside your PATH, set
+`whisperServerBinary`. CLI mode remains the default and both backends time out after 120 seconds.
 
 ## Snippets and voice commands
 
@@ -83,7 +153,9 @@ Snippets are inserted exactly as written: no filler removal, no punctuation fix-
 makes them useful for addresses, sign-offs and boilerplate. Because matching is whole-utterance only,
 "select all the rows and delete them" is dictated normally rather than executed. Set `"voiceCommands": false` to
 treat the built-in command phrases as ordinary dictation too. Commands send keystrokes, so they need Accessibility
-permission; "scratch that" is a plain ⌘Z, so it undoes whatever the focused app did last — the insertion in normal use.
+permission. "Scratch that" is enabled only after a Voice OS insertion in the same destination, and is invalidated
+by intervening keyboard input, clicks, scrolling, or another voice command. It still uses the target app’s ⌘Z
+behavior, so app-driven changes can affect its undo stack.
 
 From the CLI, snippets are passed per call and commands are off, since stdout has nothing to undo:
 
@@ -122,5 +194,5 @@ injectors; `src/mcp` is the MCP tool host.
 
 ## Roadmap
 
-Desktop app shell, hold-to-talk and hands-free hotkeys, microphone capture, native text injection (macOS, Windows,
-Linux), custom vocabulary, on-demand screen context, an integration manifest with permissions and a secrets vault.
+Hands-free hotkeys, native text injection for Windows/Linux, on-demand screen context, an integration manifest
+with permissions, a secrets vault, and broader macOS app compatibility testing.

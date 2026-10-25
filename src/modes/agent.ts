@@ -3,6 +3,8 @@ import type { AppContext, ConfirmHandler, LlmProvider, Message, ToolHost, ToolRe
 const AGENT_SYSTEM = `You are a voice assistant that operates the user's computer through tools. The user's request is a spoken transcript and may contain recognition errors. Use tools when the request needs them, prefer the fewest calls, and answer briefly in plain spoken language. Never claim an action succeeded unless a tool result confirms it.`;
 
 export interface AgentOptions {
+  signal?: AbortSignal;
+  progress?: (message: string) => void;
   maxSteps?: number;
   context?: AppContext;
 }
@@ -36,12 +38,15 @@ export async function runAgent(
   ];
 
   for (let step = 1; step <= maxSteps; step++) {
-    const response = await llm.complete({ system: AGENT_SYSTEM, messages, tools: specs, maxTokens: 1024 });
+    options.signal?.throwIfAborted();
+    options.progress?.(`Planning step ${step}…`);
+    const response = await llm.complete({ signal: options.signal, system: AGENT_SYSTEM, messages, tools: specs, maxTokens: 1024 });
     messages.push({ role: "assistant", text: response.text, toolCalls: response.toolCalls });
     if (response.toolCalls.length === 0) return { reply: response.text.trim(), steps: step };
 
     const results: ToolResult[] = [];
     for (const call of response.toolCalls) {
+      options.signal?.throwIfAborted();
       const spec = byName.get(call.name);
       if (!spec) {
         results.push({ id: call.id, content: `Unknown tool: ${call.name}`, isError: true });
@@ -51,6 +56,8 @@ export async function runAgent(
         results.push({ id: call.id, content: "The user declined this action.", isError: true });
         continue;
       }
+      options.signal?.throwIfAborted();
+      options.progress?.(`Running ${call.name}…`);
       try {
         results.push({ id: call.id, content: await tools.call(call.name, call.input) });
       } catch (error) {

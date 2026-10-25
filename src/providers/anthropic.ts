@@ -67,7 +67,7 @@ export class AnthropicLlm implements LlmProvider {
       system: request.system,
       messages: toApiMessages(request.messages),
       ...(request.tools?.length ? { tools: toApiTools(request.tools) } : {}),
-    });
+    }, { signal: request.signal });
     return fromApiContent(response.content);
   }
 }

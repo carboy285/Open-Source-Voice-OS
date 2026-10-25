@@ -22,6 +22,17 @@ describe("parseResponse", () => {
   it("falls back to plain text when the model ignores the schema", () => {
     expect(parseResponse("just words", ids())).toEqual({ text: "just words", toolCalls: [] });
   });
+
+  it("treats bare JSON values as plain replies instead of dropping or crashing on them", () => {
+    expect(parseResponse("42", ids())).toEqual({ text: "42", toolCalls: [] });
+    expect(parseResponse("null", ids())).toEqual({ text: "null", toolCalls: [] });
+    expect(parseResponse("[1,2]", ids())).toEqual({ text: "[1,2]", toolCalls: [] });
+  });
+
+  it("names the tool when its arguments are not valid JSON", () => {
+    const raw = JSON.stringify({ text: "", tool_calls: [{ name: "a__b", input_json: "{oops" }] });
+    expect(() => parseResponse(raw, ids())).toThrow('invalid arguments for tool "a__b"');
+  });
 });
 
 describe("buildPrompt", () => {
